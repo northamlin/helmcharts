@@ -1,0 +1,61 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.name }}-moodle-pod 
+    spec:
+      containers:
+        - image: {{ .Values.image_base }}/{{.Values.image}}
+          imagePullPolicy: Always
+          name: {{ .Values.name }}-pod
+          env:
+            - name: DBHOST
+              value: {{ .Values.dbhost}}
+            - name: REDIS
+              value: {{ .Values.name}}-redis-service
+            - name: PROTO
+              value: http
+            - name: DBUSER
+              value: {{ .Values.dbuser }}
+            - name: DBPASS
+              value: '{{ .Values.dbpass }}'
+            - name: SITENAME
+              value: {{ .Values.url }}
+            - name: DB
+              value: {{ .Values.name}}
+          ports:
+            - containerPort: 80
+              name: moodle
+          resources:
+            requests:
+              cpu: 100m
+          volumeMounts:
+            - name: moodle-persistent-storage
+              mountPath: /var/www/html/shared
+          livenessProbe:
+           httpGet:
+             path: /healthz/index.html
+             port: 80
+             httpHeaders:
+             - name: X-Custom-Header
+               value: Awesome
+           initialDelaySeconds: 180
+           periodSeconds: 3
+          readinessProbe:
+           httpGet:
+             path: /healthz/index.html
+             port: 80
+             httpHeaders:
+             - name: X-Custom-Header
+               value: Awesome
+           initialDelaySeconds: 180
+           periodSeconds: 3
+      volumes:
+        - name: moodle-persistent-storage
+          persistentVolumeClaim:
+            claimName: {{ .Values.name }}-moodle-disk
