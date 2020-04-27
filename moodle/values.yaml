@@ -3,7 +3,7 @@
 # Declare variables to be passed into your templates.
 name: matte-moodle
 repo: mattiashem
-image: moodle:v1
+image: moodle:v38
 dbuser: moodle
 dbpass: password
 proto: https

@@ -19,7 +19,7 @@ spec:
             - name: REDIS
               value: {{ .Values.name}}-redis-service
             - name: PROTO
-              value: http
+              value: {{ .Values.proto}}
             - name: DBUSER
               value: {{ .Values.dbuser }}
             - name: DBPASS
