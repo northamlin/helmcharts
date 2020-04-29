@@ -1,0 +1,65 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}-mysql
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.name }}-mysql-pod 
+    spec:
+      containers:
+        - image: mysql
+          imagePullPolicy: Always
+          name: {{ .Values.name }}-mysql-pod
+          env:
+            - name: MYSQL_USER
+              value: {{ .Values.dbuser }}
+            - name: MYSQL_PASSWORD
+              value: '{{ .Values.dbpass }}'
+            - name: MYSQL_ROOT_PASSWORD
+              value: {{ .Values.dbpass }}
+            - name: MYSQL_DATABASE
+              value: {{ .Values.name}}
+          ports:
+            - containerPort: 3306
+              name: sql
+          resources:
+            requests:
+              cpu: 100m
+          volumeMounts:
+            - name: mysql-persistent-storage
+              mountPath: /var/www/html/shared
+      volumes:
+        - name: mysql-persistent-storage
+          persistentVolumeClaim:
+            claimName: {{ .Values.name }}-mysql-disk
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  labels:
+    app: {{ .Values.name }}-mysql-pod
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3306
+      targetPort: 3306
+      protocol: TCP
+  selector:
+    app: {{ .Values.name }}-mysql
+---
+
+
+    kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ .Values.name }}-mysql-disk
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi

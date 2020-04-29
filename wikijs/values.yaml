@@ -1,0 +1,12 @@
+# Default values for wordpress.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+name: matte-wiki
+repo: requarks
+image: wiki:2
+dbuser: moodle
+dbpass: password
+url: wiki.apps.northamlin.com
+dbhost: mysql
+
+
