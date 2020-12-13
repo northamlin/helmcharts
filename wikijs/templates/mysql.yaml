@@ -1,9 +1,12 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Values.name }}-mysql
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.name }}{{ .Values.version }}-mysql-pod
   template:
     metadata:
       labels:
@@ -30,7 +33,7 @@ spec:
               cpu: 100m
           volumeMounts:
             - name: mysql-persistent-storage
-              mountPath: /var/www/html/shared
+              mountPath: /var/lib/mysql
       volumes:
         - name: mysql-persistent-storage
           persistentVolumeClaim:
@@ -49,7 +52,7 @@ spec:
       targetPort: 3306
       protocol: TCP
   selector:
-    app: {{ .Values.name }}-mysql
+    app: {{ .Values.name }}-mysql-pod
 ---
 
 

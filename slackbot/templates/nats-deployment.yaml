@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.deployname }}-nats
+  labels:
+    app: {{ .Values.deployname }}-nats
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.deployname }}-nats
+  template:
+    metadata:
+      annotations:
+        app: {{ .Values.deployname }}-nats
+      labels:
+        app: {{ .Values.deployname }}-nats
+    spec:
+      containers:
+        - name: {{ .Values.deployname }}-nat
+          image: "nats-streaming"
+          imagePullPolicy: Always
+          env:
+            - name: nats
+              value: nats
+          ports:
+          - name: nats
+            containerPort: 4222
+            protocol: TCP
+          - name: nats-admin
+            containerPort: 8222
+            protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: nats-admin
+          readinessProbe:
+            httpGet:
+              path: /
+              port: nats-admin
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nats
+  labels:
+    app: {{ .Values.deployname }}-nats
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4222
+      targetPort: 4222
+      protocol: TCP
+      name: nats
+  selector:
+    app: {{ .Values.deployname }}-nats

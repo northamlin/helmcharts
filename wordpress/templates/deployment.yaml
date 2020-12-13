@@ -11,12 +11,15 @@ spec:
 
 ---
 
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Values.name }}{{ .Values.version }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.name }}{{ .Values.version }}-pod
   template:
     metadata:
       labels:
@@ -69,6 +72,8 @@ spec:
                value: Awesome
            initialDelaySeconds: 3
            periodSeconds: 3
+      securityContext:
+        fsGroup: 200
       volumes:
         - name: wordpress-persistent-storage
           persistentVolumeClaim:

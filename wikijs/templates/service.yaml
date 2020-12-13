@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: {{ .Values.name }}-service
   labels:
-    app: {{ .Values.name }}-wikijs-pod
+    app: {{ .Values.name }}-wiki-pod 
 spec:
   type: ClusterIP
   ports:
@@ -12,7 +12,7 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app: {{ .Values.name }}-wikijs-pod
+    app: {{ .Values.name }}-wiki-pod 
 
 
 

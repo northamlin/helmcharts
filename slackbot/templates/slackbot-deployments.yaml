@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: slackbot
+  labels:
+    app: slackbot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ebs-sc
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.deployname }}
+  labels:
+    app: {{ .Values.deployname }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.deployname }}
+  template:
+    metadata:
+      annotations:
+        app: {{ .Values.deployname }}
+      labels:
+        app: {{ .Values.deployname }}
+    spec:
+      containers:
+        - name: {{ .Values.deployname }}
+          image: "git.booli.se:4567/booli/slackbot:{{ .Values.gitsha }}"
+          imagePullPolicy: Always
+          env:
+            - name: BACKEND
+              value: Slack
+            - name: BOT_IDENTITY
+              value: {{ .Values.slacktoken }
+            - name: CHATROOM_PRESENCE
+              value: ()
+          ports:
+          - name: http
+            containerPort: 3141
+            protocol: TCP
+          volumeMounts:
+            - name: slackbot
+              mountPath: /errbot/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+      securityContext:
+        fsGroup: 200
+      volumes:
+        - name: slackbot
+          persistentVolumeClaim:
+            claimName: slackbot
+
+
+
+
+
+
+
+
+
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: slackbot
+  labels:
+    app: {{ .Values.deployname }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3141
+      targetPort: 3141
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ .Values.deployname }}

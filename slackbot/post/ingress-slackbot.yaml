@@ -1,0 +1,30 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ingress
+  labels:
+    app: slackbot
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    cert-manager.io/cluster-issuer: "letsencrypt"
+    kubernetes.io/tls-acme: "true"
+    #traefik.ingress.kubernetes.io/router.middlewares: traefik-sso@kubernetescrd
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    monitor.stakater.com/enabled: "true"
+    external-dns.alpha.kubernetes.io/target: "lb.int.booli.se"
+    external-dns.alpha.kubernetes.io/hostname: slackbot.int.booli.se
+
+spec:
+  rules:
+    - host: slackbot.int.booli.se
+      http:
+        paths:
+          - backend:
+              serviceName: into-events
+              servicePort: 5000
+            path: /
+  tls:
+  - secretName: slackbot-int-cert
+    hosts:
+    - slackbot.int.booli.se

@@ -4,7 +4,7 @@
 name: matte-wiki
 repo: requarks
 image: wiki:2
-dbuser: moodle
+dbuser: wiki
 dbpass: password
 url: wiki.apps.northamlin.com
 dbhost: mysql

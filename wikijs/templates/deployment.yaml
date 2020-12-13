@@ -1,16 +1,19 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Values.name }}
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.name }}{{ .Values.version }}-wiki-pod
   template:
     metadata:
       labels:
         app: {{ .Values.name }}-wiki-pod 
     spec:
       containers:
-        - image: {{ .Values.image_base }}/{{.Values.image}}
+        - image: {{ .Values.repo }}/{{.Values.image}}
           imagePullPolicy: Always
           name: {{ .Values.name }}-pod
           env:
@@ -19,7 +22,7 @@ spec:
             - name: DB_TYPE
               value: mysql
             - name: DB_PORT
-              value: 3306
+              value: "3306"
             - name: DB_USER
               value: {{ .Values.dbuser }}
             - name: DB_PASS
@@ -29,8 +32,8 @@ spec:
             - name: DB_NAME
               value: {{ .Values.name}}
           ports:
-            - containerPort: 80
-              name: moodle
+            - containerPort: 3000
+              name: wiki
           resources:
             requests:
               cpu: 100m

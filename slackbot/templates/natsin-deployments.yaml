@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.deployname }}-natsin
+  labels:
+    app: {{ .Values.deployname }}-natsin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.deployname }}-natsin
+  template:
+    metadata:
+      annotations:
+        app: {{ .Values.deployname }}-natsin
+      labels:
+        app: {{ .Values.deployname }}-natsin
+    spec:
+      containers:
+      - name: {{ .Values.deployname }}-natsin
+        image: "mattiashem/nats-client:{{ .Values.gitsha }}"
+        imagePullPolicy: Always
+        env:
+          - name: nats
+            value: nats
+        ports:
+        - name: http
+          containerPort: 5000
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+      imagePullSecrets:
+          - name: gitlab 
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: into-events
+  labels:
+    app: {{ .Values.deployname }}-natsin
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5000
+      targetPort: 5000
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ .Values.deployname }}-natsin
