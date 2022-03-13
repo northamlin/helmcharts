@@ -1,0 +1,27 @@
+# Default values for mautic.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+name: matomo
+
+
+replicaCount: 1
+
+image: matomo
+
+
+dbuser: postal
+dbpass: postalpass
+dbhost: mysql
+dbname: postal
+proto: https
+url: www.matomo.se
+SSLPROXY: true
+
+resources:
+   limits:
+     cpu: 100m
+     memory: 128Mi
+   requests:
+     cpu: 100m
+     memory: 128Mi

@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.name }}-web
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.name }}-web
+    spec:
+      initContainers:
+        - image: {{.Values.image}}
+          imagePullPolicy: Always
+          name: {{ .Values.name }}-init
+          command: ["postal","initialize"]
+          ports:
+            - containerPort: 25
+              name: stmp
+          resources:
+            requests:
+              cpu: 100m
+          volumeMounts:
+            - name: config
+              mountPath: "/config"
+              readOnly: true
+      containers:
+        - image: {{.Values.image}}
+          imagePullPolicy: Always
+          name: {{ .Values.name }}
+          command: ["postal","web-server"]
+          ports:
+            - containerPort: 5000
+              name: http
+          resources:
+            requests:
+              cpu: 100m
+          volumeMounts:
+            - name: config
+              mountPath: "/config"
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: portal
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.name }}-web
+  labels:
+    app: {{ .Values.name }}-web
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 5000
+      protocol: TCP
+  selector:
+    app: {{ .Values.name }}-web

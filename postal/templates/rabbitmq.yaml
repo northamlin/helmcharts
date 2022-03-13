@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}-rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.name }}-rabbitmq
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.name }}-rabbitmq
+    spec:
+      containers:
+        - image: rabbitmq
+          imagePullPolicy: Always
+          name: rabbitmq
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: {{ .Values.rquser}}
+            - name: RABBITMQ_DEFAULT_PASS
+              value: {{ .Values.rqpass}}
+            - name: RABBITMQ_DEFAULT_VHOST
+              value: {{ .Values.rqvhost}}
+          ports:
+            - containerPort: 5672
+              name: tabbit
+          resources:
+            requests:
+              cpu: 100m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  labels:
+    app: {{ .Values.name }}-rabbitmq
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5672
+      targetPort: 5672
+      protocol: TCP
+  selector:
+    app: {{ .Values.name }}-rabbitmq
+---
+
+

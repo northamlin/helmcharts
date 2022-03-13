@@ -6,7 +6,7 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: {{ .Values.name }}{{ .Values.version }}-pod
+      app: {{ .Values.name }}-moodle-pod 
   template:
     metadata:
       labels:

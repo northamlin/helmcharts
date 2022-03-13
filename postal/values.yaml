@@ -1,0 +1,47 @@
+# Default values for mautic.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+
+name: postal
+image: ghcr.io/postalserver/postal
+dbuser: root
+dbpass: postalpass
+dbhost: mysql
+dbname: postal
+proto: https
+
+rqhost: rabbitmq
+rquser: postal
+rqpass: postal
+rqvhost: postal
+
+resources:
+   limits:
+     cpu: 100m
+     memory: 128Mi
+   requests:
+     cpu: 100m
+     memory: 128Mi
+signingkey: "-----BEGIN RSA PRIVATE KEY-----MIICXAIBAAKBgQDRLrpdKzYYro0EaqsjfdFgOoXNQj+0ZCIawKQ1/Xbig+iDHw2QxUX8LdyH1vvbNYxGhEYZosACJF05fueXWAClaV/Lb20jQFoUfCEOhLFutJrDPs3+L9BUjg6pgu6Cy6ei7qQ0b5DLcKsaooomThZAD6+WvS0LocSlJ2sRrKKJuQIDAQABAoGAOTAaOTCAGJ1X5jY3VXunSzSUsfoDqpCZllDGVBBYeTLw1TAfKE4WhQwQt3552oM4N2sgMxAAiFViuz5LmF+xxQiJHG1XjI+iI8/bSNK/40oO27PAzBEWXL2T9323xma1MX2qETCmpmHibPC/TgOGiwpxuOFPvTrKWIz2l+Zz36UCQQDtLAGcYZIBsmWOp+b2e40d1cOolo0oPVchptwEEX5ZXL61Ufp1R4XBKSkX/IK5tSuqOnfu9hKXa9I5BRExAoGHAkEA4cnmVkR6cDXfR1Rso1UZpFdTiPM36EqYNRYLkU40v2WfKEDTXVHCRS2hxKx9jA46qPjhcAhxaP9Y0hd2TU5qvwJAfBtJBIHyGz00839c1qI0Z+ZSKkgNuX7Pt2ZPPznAOhbUHKG3Q+OXVEqrnEegSHlLThqmY78UX3QmX3wNUO4UxQJBAKQaKd7pRlPn06/0HEFZyJk5Hu2aWDfsf1OWAjJJtOym31ZSR0y774Z38+sNsvHoJZpJyQ+0EzlM3TFU/BaTt+ECQDW59lxErcVjM64QPR80jPt3KhXiFzfPzSLYSdi55WCe3A5AcvKpfwXp0nYRdv5inptJ4cBgGJCP3tyaXZ0uMb0=-----END RSA PRIVATE KEY-----"
+
+
+dns:
+  mx_records:
+    - mx.postal.example.com
+  smtp_server_hostname: postal.example.com
+  spf_include: spf.postal.example.com
+  return_path: rp.postal.example.com
+  route_domain: routes.postal.example.com
+  track_domain: track.postal.example.com
+
+smtp:
+  host: 127.0.0.1
+  port: 2525
+  username: user
+  password: pass
+  from_name: Postal
+  from_address: postal.yourdomain.com
+
+rails:
+  secret_key: 37d184a591cf2b02566f76656479661624f56f1b5843ffda1c7d11934658592f505af3b538ee8a6e2f9a54d6664840b4dd8ecdb83d24a10fbbc70cc46341c80db1fd2631fa2d2f666906616c95dc7eb04ba6513ade96c0c13d044f61f167c66a901ca649fc5bc9475ba1abc77b54f89644cb9a7867f0a78c36572dc8377ef42f

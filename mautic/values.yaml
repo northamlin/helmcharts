@@ -1,0 +1,38 @@
+# Default values for mautic.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+name: test
+
+
+replicaCount: 1
+
+image: mautic:v4-apache
+image_base: mautic
+
+dbuser: dnusers
+dbpass: dbpasswprd
+dbhost: mysql
+dbname: mautic
+
+rqhost: rabbitmq
+rquser: postal
+rqpass: postal
+rqvhost: postal
+
+
+proto: https
+url: demo.utbild.se
+SSLPROXY: true
+kubedomainname: appselinose
+key: hej
+resources:
+   limits:
+     cpu: 100m
+     memory: 128Mi
+   requests:
+     cpu: 100m
+     memory: 128Mi
+
+
+#signingkey: "-----BEGIN RSA PRIVATE KEY-----MIICXAIBAAKBgQDRLrpdKzYYro0EaqsjfdFgOoXNQj+0ZCIawKQ1/Xbig+iDHw2QxUX8LdyH1vvbNYxGhEYZosACJF05fueXWAClaV/Lb20jQFoUfCEOhLFutJrDPs3+L9BUjg6pgu6Cy6ei7qQ0b5DLcKsaooomThZAD6+WvS0LocSlJ2sRrKKJuQIDAQABAoGAOTAaOTCAGJ1X5jY3VXunSzSUsfoDqpCZllDGVBBYeTLw1TAfKE4WhQwQt3552oM4N2sgMxAAiFViuz5LmF+xxQiJHG1XjI+iI8/bSNK/40oO27PAzBEWXL2T9323xma1MX2qETCmpmHibPC/TgOGiwpxuOFPvTrKWIz2l+Zz36UCQQDtLAGcYZIBsmWOp+b2e40d1cOolo0oPVchptwEEX5ZXL61Ufp1R4XBKSkX/IK5tSuqOnfu9hKXa9I5BRExAoGHAkEA4cnmVkR6cDXfR1Rso1UZpFdTiPM36EqYNRYLkU40v2WfKEDTXVHCRS2hxKx9jA46qPjhcAhxaP9Y0hd2TU5qvwJAfBtJBIHyGz00839c1qI0Z+ZSKkgNuX7Pt2ZPPznAOhbUHKG3Q+OXVEqrnEegSHlLThqmY78UX3QmX3wNUO4UxQJBAKQaKd7pRlPn06/0HEFZyJk5Hu2aWDfsf1OWAjJJtOym31ZSR0y774Z38+sNsvHoJZpJyQ+0EzlM3TFU/BaTt+ECQDW59lxErcVjM64QPR80jPt3KhXiFzfPzSLYSdi55WCe3A5AcvKpfwXp0nYRdv5inptJ4cBgGJCP3tyaXZ0uMb0=-----END RSA PRIVATE KEY-----"
