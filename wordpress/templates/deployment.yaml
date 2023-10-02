@@ -109,10 +109,12 @@ spec:
           {{ end }}
           volumeMounts:
             - name: wordpress-persistent-storage
-              mountPath: /repo
+              mountPath: /var/www/html/wp-content/
+            - name: health
+              mountPath: /var/www/html/health/
           livenessProbe:
            httpGet:
-             path: /health
+             path: /health/index.html
              port: 80
              httpHeaders:
              - name: X-Custom-Header
@@ -121,7 +123,7 @@ spec:
            periodSeconds: 3
           readinessProbe:
            httpGet:
-             path: /health
+             path: /health/index.html
              port: 80
              httpHeaders:
              - name: X-Custom-Header
