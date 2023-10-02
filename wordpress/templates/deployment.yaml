@@ -1,63 +1,119 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: {{ .Values.name }}{{ .Values.version }}-disk
+  name: {{ .Values.name }}-{{ .Values.uuid }}
+  annotations:
+      {{-  range $key, $topping := $.Values.hosting.tags }}
+      {{ $key }}: {{ $topping }}
+      {{- end }} 
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 20Gi
+      storage: {{ .Values.storage }}
+    storageClassName: {{ .Values.storageClass }}
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.name }}-{{ .Values.uuid }}
+data:
+  index.html: |
+    <html>
+    <head>
+    <title>Health Check</title>
+    </head>
+    <body>
+    <h1>Health Check</h1>
+    </body>
+    </html>
+
 
 ---
 
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.name }}{{ .Values.version }}
+  name: {{ .Values.name }}-{{ .Values.uuid }}
+  annotations:
+      {{-  range $key, $topping := $.Values.hosting.tags }}
+      {{ $key }}: {{ $topping }}
+      {{- end }} 
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: {{ .Values.name }}{{ .Values.version }}-pod
+      app: {{ .Values.name }}-{{ .Values.uuid }}
   template:
     metadata:
       labels:
-        app: {{ .Values.name }}{{ .Values.version }}-pod 
+        app: {{ .Values.name }}-{{ .Values.uuid }} 
+ 
     spec:
       containers:
-        - image: {{ .Values.image_base }}/{{.Values.image}}
+        - image: {{.Values.image}}
           imagePullPolicy: Always
-          name: {{ .Values.name }}{{ .Values.version }}-pod
+          name: wordpress
           env:
-            - name: DBHOST
-              # Connect to the SQL proxy over the local network on a fixed port.
-              # Change the [PORT] to the port number used by your database
-              # (e.g. 3306).
+            - name: WORDPRESS_DB_HOST
               value: {{ .Values.dbhost }}
-            # These secrets are required to start the pod.
-            # [START cloudsql_secrets]
-            - name: DBPASS
-              value: '{{ .Values.dbpass }}'
-            - name: SITENAME
-              value: {{ .Values.name }}
+            - name: WORDPRESS_DB_USER
+              valueFrom:
+                 secretKeyRef:
+                   name: {{ .Values.name }}-{{ .Values.uuid }}
+                   key: SQL_USER
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom:
+                 secretKeyRef:
+                   name: {{ .Values.name }}-{{ .Values.uuid }}
+                   key: SQL_PASSWORD
+            - name: WORDPRESS_DB_NAME
+              value: {{ .Values.dbname }}
+            - name: WORDPRESS_TABLE_PREFIX
+              value: {{ .Values.dbprefix }}
           ports:
-            - containerPort: 8000
+            - containerPort: 80
               name: wordpress
+          
           resources:
+          {{ if eq .Values.resource "low" }}
             requests:
               memory: "64Mi"
               cpu: "250m"
             limits:
               memory: "128Mi"
               cpu: "500m"
+          {{ else if eq .Values.resource "medium" }}
+            requests:
+              memory: "256Mi"
+              cpu: "500m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          {{ else if eq .Values.resource "high" }}
+            requests:
+              memory: "2048Mi"
+              cpu: "1000m"
+            limits:
+              memory: "4096Mi"
+              cpu: "2000m"
+          {{ else if eq .Values.resource "custom" }}
+            requests:
+              memory: {{ .Values.memory }}
+              cpu: {{ .Values.cpu }}
+            limits:
+              memory: {{ .Values.memory }}
+              cpu: {{ .Values.cpu }}
+          {{ end }}
           volumeMounts:
             - name: wordpress-persistent-storage
               mountPath: /repo
           livenessProbe:
            httpGet:
-             path: /healthz/index.html
-             port: 8000
+             path: /health
+             port: 80
              httpHeaders:
              - name: X-Custom-Header
                value: Awesome
@@ -65,8 +121,8 @@ spec:
            periodSeconds: 3
           readinessProbe:
            httpGet:
-             path: /healthz/index.html
-             port: 8000
+             path: /health
+             port: 80
              httpHeaders:
              - name: X-Custom-Header
                value: Awesome
@@ -75,6 +131,9 @@ spec:
       securityContext:
         fsGroup: 200
       volumes:
+        - name: health
+          configMap:
+            name: {{ .Values.name }}-{{ .Values.uuid }}
         - name: wordpress-persistent-storage
           persistentVolumeClaim:
-            claimName: {{ .Values.name }}{{ .Values.version }}-disk
+            claimName: {{ .Values.name }}-{{ .Values.uuid }}

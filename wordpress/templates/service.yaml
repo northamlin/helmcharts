@@ -1,9 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Values.name }}{{ .Values.version }}-service
+  name: {{ .Values.name }}-{{ .Values.uuid }}
   labels:
     app: {{ .Values.name }}{{ .Values.version }}-pod
+  annotations:
+      {{-  range $key, $topping := $.Values.hosting.tags }}
+      {{ $key }}: {{ $topping }}
+      {{- end }} 
 spec:
   type: ClusterIP
   ports:
@@ -12,4 +16,4 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app: {{ .Values.name }}{{ .Values.version }}-pod
+    app: {{ .Values.name }}-{{ .Values.uuid }}

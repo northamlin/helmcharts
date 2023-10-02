@@ -3,14 +3,42 @@
 # Declare variables to be passed into your templates.
 
 replicaCount: 1
-# Default values for wordpress.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+
+
+uuid: hbdftsrfed
 name: wordpress
-image_base: mattiashem
-image: wp-base:5.3
-dbpass: password
-dbhost: sql.sql.svc.cluster.local:3306
+image: wordpress
 url: demo.example.com
-namespace: default
 version: 1
+
+dbhost: mysql
+dbuser: wordpress
+dbpass: wordpress
+dbname: wordpress
+dbprefix: wp_
+
+
+wpuser: admin
+wppass: admin
+
+resource: low
+#Only for custom
+cpu: 100m
+memory: 128Mi
+
+
+
+
+storage: 10Gi
+storageClass: standard
+
+hosting:
+  tags: 
+    norh/deployname: wordpress
+    norh/resources: low
+    norh/deploydate: date
+    norh/userid: userid
+    norh/id: idss
+  id:
+    - 1234-1234-22333
+  repo: github.com/braveops/helmrepo/wordpress
