@@ -23,7 +23,7 @@ spec:
         paths:
           - backend:
               service:
-                name: {{ .Values.name }}{{ .Values.version }}-service
+                name: {{ .Values.name }}-{{ .Values.uuid }}
                 port:
                     number: 80
             path: /
