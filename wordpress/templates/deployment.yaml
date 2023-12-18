@@ -8,7 +8,7 @@ metadata:
       {{- end }} 
 spec:
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   resources:
     requests:
       storage: {{ .Values.storage }}
@@ -112,6 +112,12 @@ spec:
               mountPath: /var/www/html/wp-content/
             - name: health
               mountPath: /var/www/html/health/
+            - mountPath: /usr/local/etc/php/conf.d/custom.ini
+              name: wordpress-php-options
+              subPath: wordpress.ini
+            - mountPath: /etc/apache2/sites-enabled/000-default.conf
+              name: apache-config
+              subPath: 000-default.conf
           livenessProbe:
            httpGet:
              path: /health/index.html
@@ -139,3 +145,11 @@ spec:
         - name: wordpress-persistent-storage
           persistentVolumeClaim:
             claimName: {{ .Values.name }}-{{ .Values.uuid }}
+        - configMap:
+            defaultMode: 420
+            name: word-php-{{ .Values.name }}-{{ .Values.uuid }}
+          name: wordpress-php-optons
+        - configMap:
+            defaultMode: 420
+            name: apache-{{ .Values.name }}-{{ .Values.uuid }}
+          name: apache-config

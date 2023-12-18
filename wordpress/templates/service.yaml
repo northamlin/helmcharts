@@ -5,6 +5,9 @@ metadata:
   labels:
     app: {{ .Values.name }}{{ .Values.version }}-pod
   annotations:
+      prometheus.io/path: /metrics
+      prometheus.io/port: "9117"
+      prometheus.io/scrape: "true"
       {{-  range $key, $topping := $.Values.hosting.tags }}
       {{ $key }}: {{ $topping }}
       {{- end }} 

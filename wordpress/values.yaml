@@ -32,6 +32,8 @@ memory: 128Mi
 storage: 10Gi
 storageClass: standard
 
+redis: false
+
 hosting:
   tags: 
     norh/deployname: wordpress
