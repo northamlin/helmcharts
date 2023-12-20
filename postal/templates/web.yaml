@@ -12,21 +12,21 @@ spec:
       labels:
         app: {{ .Values.name }}-web
     spec:
-      initContainers:
-        - image: {{.Values.image}}
-          imagePullPolicy: Always
-          name: {{ .Values.name }}-init
-          command: ["postal","initialize"]
-          ports:
-            - containerPort: 25
-              name: stmp
-          resources:
-            requests:
-              cpu: 100m
-          volumeMounts:
-            - name: config
-              mountPath: "/config"
-              readOnly: true
+      #initContainers:
+      #  - image: {{.Values.image}}
+      #    imagePullPolicy: Always
+      #    name: {{ .Values.name }}-init
+      #    command: ["postal","initialize",">>","/dev/null"]
+      #    ports:
+      #      - containerPort: 25
+      #        name: stmp
+      #    resources:
+      #      requests:
+      #        cpu: 100m
+      #    volumeMounts:
+      #      - name: config
+      #        mountPath: "/config"
+      #        readOnly: true
       containers:
         - image: {{.Values.image}}
           imagePullPolicy: Always
@@ -54,7 +54,7 @@ metadata:
   labels:
     app: {{ .Values.name }}-web
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
     - port: 80
       targetPort: 5000

@@ -1,0 +1,27 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name:  {{ .Values.name }}
+  labels:
+    app:  {{ .Values.name }}
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    cert-manager.io/cluster-issuer: "letsencrypt"
+    kubernetes.io/tls-acme: "true"
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure,web
+    external-dns.alpha.kubernetes.io/target: "lb..apps.elino.se"
+    external-dns.alpha.kubernetes.io/hostname:  {{ .Values.name }}.apps.elino.se
+
+spec:
+  rules:
+    - host:  {{ .Values.name }}.apps.elino.se
+      http:
+        paths:
+          - backend:
+              serviceName: {{ .Values.name }}-web
+              servicePort: 80
+            path: /
+  tls:
+  - secretName: tls-{{ .Values.name }}-cert
+    hosts:
+    -  {{ .Values.name }}.apps.elino.se

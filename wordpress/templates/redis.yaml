@@ -1,5 +1,5 @@
 ---
-{{ if .Values.redis.enabled -}}
+{{ if .Values.redis.enabled }}
 
 # Source: redis-cluster/templates/redis-svc.yaml
 apiVersion: v1

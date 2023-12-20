@@ -1,13 +1,16 @@
 # Default values for mautic.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
+#
+# CREATE USER 'postal'@'%' IDENTIFIED BY 'hygasdtre45646jasdasd';
+# GRANT ALL PRIVILEGES ON postal.*  TO 'postal'@'%';
 
 
 name: postal
 image: ghcr.io/postalserver/postal
-dbuser: root
-dbpass: postalpass
-dbhost: mysql
+dbuser: postal
+dbpass: hsdtyu5767hkjashdjas678asd
+dbhost: mysql-pxc.sql.svc
 dbname: postal
 proto: https
 
@@ -23,17 +26,47 @@ resources:
    requests:
      cpu: 100m
      memory: 128Mi
-signingkey: "-----BEGIN RSA PRIVATE KEY-----MIICXAIBAAKBgQDRLrpdKzYYro0EaqsjfdFgOoXNQj+0ZCIawKQ1/Xbig+iDHw2QxUX8LdyH1vvbNYxGhEYZosACJF05fueXWAClaV/Lb20jQFoUfCEOhLFutJrDPs3+L9BUjg6pgu6Cy6ei7qQ0b5DLcKsaooomThZAD6+WvS0LocSlJ2sRrKKJuQIDAQABAoGAOTAaOTCAGJ1X5jY3VXunSzSUsfoDqpCZllDGVBBYeTLw1TAfKE4WhQwQt3552oM4N2sgMxAAiFViuz5LmF+xxQiJHG1XjI+iI8/bSNK/40oO27PAzBEWXL2T9323xma1MX2qETCmpmHibPC/TgOGiwpxuOFPvTrKWIz2l+Zz36UCQQDtLAGcYZIBsmWOp+b2e40d1cOolo0oPVchptwEEX5ZXL61Ufp1R4XBKSkX/IK5tSuqOnfu9hKXa9I5BRExAoGHAkEA4cnmVkR6cDXfR1Rso1UZpFdTiPM36EqYNRYLkU40v2WfKEDTXVHCRS2hxKx9jA46qPjhcAhxaP9Y0hd2TU5qvwJAfBtJBIHyGz00839c1qI0Z+ZSKkgNuX7Pt2ZPPznAOhbUHKG3Q+OXVEqrnEegSHlLThqmY78UX3QmX3wNUO4UxQJBAKQaKd7pRlPn06/0HEFZyJk5Hu2aWDfsf1OWAjJJtOym31ZSR0y774Z38+sNsvHoJZpJyQ+0EzlM3TFU/BaTt+ECQDW59lxErcVjM64QPR80jPt3KhXiFzfPzSLYSdi55WCe3A5AcvKpfwXp0nYRdv5inptJ4cBgGJCP3tyaXZ0uMb0=-----END RSA PRIVATE KEY-----"
+signingkey: |
+     -----BEGIN PRIVATE KEY-----
+     MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCa0tgWvWkBz2Gb
+     D8s/2mOcunkml1hj50WCGsKGojRywS7nXQl87Uh3zu8dGfCT0zybGZq1jYt6PcGG
+     0rDFdqemqWUpdyW/4/FxCUwR0fRZn0/cLq8lwdGNHstSzeiDVh7/Sq5NC10MBewG
+     cSa1yyoI9za0wYa+U1alKkOBc0Aq05FWKeYWynOJOSJuWViB6cvAV1TRv38PY6gW
+     00Ed0vbbhpVNeYdsfXuBFCojN2GjM89IvhbzRpRtZRc7C5hUzWM6S95UphMe08Bk
+     cUfXMAdt/lLMY9/LPQ4VUao5WEKhPofOcBBDcW5LnR8GovjsotbkBSA/WPtfdFlc
+     sSD3mYCJAgMBAAECggEAA37VY10LIv/zPpCamIJWG6afn9oMpDPHX1a6k9bTa5BW
+     PmG8ujnyuAa/YgcxBetf28oWErmDf8LnbMNyu4CQbCw4pRkkLGsJa1GICsJ0W3Yj
+     888HhAkWUbLzaPcOY/G0sTOW0BU8uG3lTGdvVe0kca+gJ/BTGhawVvoHbGOlXBoh
+     86pmElwdKxzTyW4Xae3cbXJpFX8SikMFQ9fPVF28DhGLwy4eBm46LjC6fq7r7CM1
+     RbazlNlMHqQ1MUqy8SLR6hV45vucq56G+LpnopJMQS7FvgqDb35vaRXmHE1OaiSB
+     UCEwkZyBBnEwWCOn24C8+hoEIDSrPHbu8bfC1/GMcQKBgQC5fwCS9u/jSFa78Zd5
+     sImEr/Rs5LQNfNuDOb99nVBXvv8UhvHclFOKA21FsXC0gubS2x+F6P0mLLFUiUkp
+     jyI4syFSL3MNQ9nCzBNWBfHxkVg3+/ecEaGeYMbacb2bncpqlWxz1J48WQIph6Mf
+     BY1v+i5LiKGMNjtrELkKjfT8uQKBgQDVq17rOfJ6agUWAvl6ozg0q8MIeB+HZrRu
+     gX6+phC/MmYCoPZ+C9+zLP+jutNEPwKgRFwDHUvhRrkF480/wwGk6SgVl+Km1EJy
+     gqcymDk0xTjWAeISSMH4g8NKEV3t5POdFJf11Jx0ddhD96KpGyqvwnUaGS1P3XoA
+     PiKurODaUQKBgDlBl2bFrBQmrwcCMnRQZpI7UaIPEfib0pH10EKwvSzoeonWgW9J
+     pWOTXTZG5/f/88mf82H9Ia6X2wCyA5A9ax2/RQi+NrAggmXbYhiKazzaVTWqo6pb
+     0tw1GQwyUYloMiOmDbzPIyyTeNRi1pnrt9WZjpKoEN1bnAmXNtaoLLeZAoGAL+WZ
+     gntb6qsHdta13BLoj44NS0G6N50DR15J7izFxkZi7aXte3Xn8H9e0vIXV84UJZ8N
+     TTltABPdd/+HzApHvRLzBFwm16TvPEIjfsj20eiABCEp71VV/gJzbZAVETXokkbC
+     hb3iUIz2LM4/LU9Es1+Q5ofMS4HnTlSfa66fPPECgYEAj6+d2xjZTHKIQtQ4hUKG
+     jBJ6Py4KRoaAb5jdchDQA+WDsZwBky1kC4D6cwX7jbSbJk9bfpeWSFvdu/FQMe8X
+     vil6HFV1pdwoUG9hEc9bmbHpaUIHA74Fe2u/nRED+qAJiHgEcmSzoyKRuMssYEeO
+     a5u7YGDkbABvTgUlISI07Oo=
+     -----END PRIVATE KEY-----
+
+
 
 
 dns:
   mx_records:
-    - mx.postal.example.com
-  smtp_server_hostname: postal.example.com
-  spf_include: spf.postal.example.com
-  return_path: rp.postal.example.com
-  route_domain: routes.postal.example.com
-  track_domain: track.postal.example.com
+    - mx.bh1.booli.se
+  smtp_server_hostname: postal.bh1.booli.se
+  spf_include: spf.postal.bh1.booli.se
+  return_path: rp.postal.bh1.booli.se
+  route_domain: routes.postal.bh1.booli.se
+  track_domain: track.postal.bh1.booli.se
 
 smtp:
   host: 127.0.0.1
@@ -41,7 +74,7 @@ smtp:
   username: user
   password: pass
   from_name: Postal
-  from_address: postal.yourdomain.com
+  from_address: postal.bh1.booli.se
 
 rails:
   secret_key: 37d184a591cf2b02566f76656479661624f56f1b5843ffda1c7d11934658592f505af3b538ee8a6e2f9a54d6664840b4dd8ecdb83d24a10fbbc70cc46341c80db1fd2631fa2d2f666906616c95dc7eb04ba6513ade96c0c13d044f61f167c66a901ca649fc5bc9475ba1abc77b54f89644cb9a7867f0a78c36572dc8377ef42f

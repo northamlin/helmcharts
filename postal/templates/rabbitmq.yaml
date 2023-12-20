@@ -25,7 +25,7 @@ spec:
               value: {{ .Values.rqvhost}}
           ports:
             - containerPort: 5672
-              name: tabbit
+              name: rabbit
           resources:
             requests:
               cpu: 100m
