@@ -9,7 +9,7 @@
 name: postal
 image: ghcr.io/postalserver/postal
 dbuser: postal
-dbpass: hsdtyu5767hkjashdjas678asd
+dbpass: password
 dbhost: mysql-pxc.sql.svc
 dbname: postal
 proto: https
@@ -28,32 +28,7 @@ resources:
      memory: 128Mi
 signingkey: |
      -----BEGIN PRIVATE KEY-----
-     MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCa0tgWvWkBz2Gb
-     D8s/2mOcunkml1hj50WCGsKGojRywS7nXQl87Uh3zu8dGfCT0zybGZq1jYt6PcGG
-     0rDFdqemqWUpdyW/4/FxCUwR0fRZn0/cLq8lwdGNHstSzeiDVh7/Sq5NC10MBewG
-     cSa1yyoI9za0wYa+U1alKkOBc0Aq05FWKeYWynOJOSJuWViB6cvAV1TRv38PY6gW
-     00Ed0vbbhpVNeYdsfXuBFCojN2GjM89IvhbzRpRtZRc7C5hUzWM6S95UphMe08Bk
-     cUfXMAdt/lLMY9/LPQ4VUao5WEKhPofOcBBDcW5LnR8GovjsotbkBSA/WPtfdFlc
-     sSD3mYCJAgMBAAECggEAA37VY10LIv/zPpCamIJWG6afn9oMpDPHX1a6k9bTa5BW
-     PmG8ujnyuAa/YgcxBetf28oWErmDf8LnbMNyu4CQbCw4pRkkLGsJa1GICsJ0W3Yj
-     888HhAkWUbLzaPcOY/G0sTOW0BU8uG3lTGdvVe0kca+gJ/BTGhawVvoHbGOlXBoh
-     86pmElwdKxzTyW4Xae3cbXJpFX8SikMFQ9fPVF28DhGLwy4eBm46LjC6fq7r7CM1
-     RbazlNlMHqQ1MUqy8SLR6hV45vucq56G+LpnopJMQS7FvgqDb35vaRXmHE1OaiSB
-     UCEwkZyBBnEwWCOn24C8+hoEIDSrPHbu8bfC1/GMcQKBgQC5fwCS9u/jSFa78Zd5
-     sImEr/Rs5LQNfNuDOb99nVBXvv8UhvHclFOKA21FsXC0gubS2x+F6P0mLLFUiUkp
-     jyI4syFSL3MNQ9nCzBNWBfHxkVg3+/ecEaGeYMbacb2bncpqlWxz1J48WQIph6Mf
-     BY1v+i5LiKGMNjtrELkKjfT8uQKBgQDVq17rOfJ6agUWAvl6ozg0q8MIeB+HZrRu
-     gX6+phC/MmYCoPZ+C9+zLP+jutNEPwKgRFwDHUvhRrkF480/wwGk6SgVl+Km1EJy
-     gqcymDk0xTjWAeISSMH4g8NKEV3t5POdFJf11Jx0ddhD96KpGyqvwnUaGS1P3XoA
-     PiKurODaUQKBgDlBl2bFrBQmrwcCMnRQZpI7UaIPEfib0pH10EKwvSzoeonWgW9J
-     pWOTXTZG5/f/88mf82H9Ia6X2wCyA5A9ax2/RQi+NrAggmXbYhiKazzaVTWqo6pb
-     0tw1GQwyUYloMiOmDbzPIyyTeNRi1pnrt9WZjpKoEN1bnAmXNtaoLLeZAoGAL+WZ
-     gntb6qsHdta13BLoj44NS0G6N50DR15J7izFxkZi7aXte3Xn8H9e0vIXV84UJZ8N
-     TTltABPdd/+HzApHvRLzBFwm16TvPEIjfsj20eiABCEp71VV/gJzbZAVETXokkbC
-     hb3iUIz2LM4/LU9Es1+Q5ofMS4HnTlSfa66fPPECgYEAj6+d2xjZTHKIQtQ4hUKG
-     jBJ6Py4KRoaAb5jdchDQA+WDsZwBky1kC4D6cwX7jbSbJk9bfpeWSFvdu/FQMe8X
-     vil6HFV1pdwoUG9hEc9bmbHpaUIHA74Fe2u/nRED+qAJiHgEcmSzoyKRuMssYEeO
-     a5u7YGDkbABvTgUlISI07Oo=
+
      -----END PRIVATE KEY-----
 
 
@@ -61,12 +36,12 @@ signingkey: |
 
 dns:
   mx_records:
-    - mx.bh1.booli.se
-  smtp_server_hostname: postal.bh1.booli.se
-  spf_include: spf.postal.bh1.booli.se
-  return_path: rp.postal.bh1.booli.se
-  route_domain: routes.postal.bh1.booli.se
-  track_domain: track.postal.bh1.booli.se
+    - mx.elino.se
+  smtp_server_hostname: postal.elino.se
+  spf_include: spf.postal.elino.se
+  return_path: rp.postal.elino.se
+  route_domain: routes.postal.elino.se
+  track_domain: track.postal.elino.se
 
 smtp:
   host: 127.0.0.1
@@ -74,7 +49,7 @@ smtp:
   username: user
   password: pass
   from_name: Postal
-  from_address: postal.bh1.booli.se
+  from_address: postal.elino.se
 
 rails:
   secret_key: 37d184a591cf2b02566f76656479661624f56f1b5843ffda1c7d11934658592f505af3b538ee8a6e2f9a54d6664840b4dd8ecdb83d24a10fbbc70cc46341c80db1fd2631fa2d2f666906616c95dc7eb04ba6513ade96c0c13d044f61f167c66a901ca649fc5bc9475ba1abc77b54f89644cb9a7867f0a78c36572dc8377ef42f
