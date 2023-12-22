@@ -158,7 +158,7 @@ spec:
         - configMap:
             defaultMode: 420
             name: word-php-{{ .Values.name }}-{{ .Values.uuid }}
-          name: wordpress-php-optons
+          name: wordpress-php-options
         - configMap:
             defaultMode: 420
             name: apache-{{ .Values.name }}-{{ .Values.uuid }}

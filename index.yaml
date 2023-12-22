@@ -3,16 +3,16 @@ entries:
   wordpress:
   - apiVersion: v1
     appVersion: "1.0"
-    created: "2023-12-22T14:08:08.401293488+01:00"
+    created: "2023-12-22T14:23:00.070709318+01:00"
     description: A Helm chart for deploying Wordpress on Elino or Northamlin Cloud
-    digest: 06a29eb8303b629d73f517a1de5173ebd23de86f53a80ff13aaebcec85485677
+    digest: e3f4035553879d6807b3d61081068598b39e6a9981a6d71d1fac2d85587e5343
     name: wordpress
     urls:
     - wordpress-0.7.0.tgz
     version: 0.7.0
   - apiVersion: v1
     appVersion: "1.0"
-    created: "2023-12-22T14:08:08.401001436+01:00"
+    created: "2023-12-22T14:23:00.070477746+01:00"
     description: A Helm chart for deploying Wordpress on Northamlin Cloud
     digest: 781539d4d518b1b2ec5b7564c8cd5860b561f4ac205f9f17d732895464ac6610
     name: wordpress
@@ -21,7 +21,7 @@ entries:
     version: 0.6.0
   - apiVersion: v1
     appVersion: "1.0"
-    created: "2023-12-22T14:08:08.400425491+01:00"
+    created: "2023-12-22T14:23:00.070291005+01:00"
     description: A Helm chart for deploying Wordpress on Northamlin Cloud
     digest: 7b5487a1eda5765892b58b5c4cc6d8f39d0bdb4f6a70831176faa9f2ef171534
     name: wordpress
@@ -30,7 +30,7 @@ entries:
     version: 0.5.0
   - apiVersion: v1
     appVersion: "1.0"
-    created: "2023-12-22T14:08:08.400211799+01:00"
+    created: "2023-12-22T14:23:00.070077613+01:00"
     description: A Helm chart for deploying Wordpress on Northamlin Cloud
     digest: 8a3a7b9e72cc74e4c072fd1e27f38f1e4df729e6a563276eef3bd40e4ace1f3c
     name: wordpress
@@ -39,7 +39,7 @@ entries:
     version: 0.4.0
   - apiVersion: v1
     appVersion: "1.0"
-    created: "2023-12-22T14:08:08.399991648+01:00"
+    created: "2023-12-22T14:23:00.069871322+01:00"
     description: A Helm chart for deploying Wordpress on Northamlin Cloud
     digest: 0721dd09cd9665d9697f96a8281ab05c467b636528758217fade20272243f462
     name: wordpress
@@ -48,11 +48,11 @@ entries:
     version: 0.3.0
   - apiVersion: v1
     appVersion: "1.0"
-    created: "2023-12-22T14:08:08.399777136+01:00"
+    created: "2023-12-22T14:23:00.069635+01:00"
     description: A Helm chart for deploying Wordpress on Northamlin Cloud
     digest: 0e36e311de82a03e1d82f743428e099212fd7ee26d7395463ad8c9451995b6c1
     name: wordpress
     urls:
     - wordpress-0.2.0.tgz
     version: 0.2.0
-generated: "2023-12-22T14:08:08.399458043+01:00"
+generated: "2023-12-22T14:23:00.069167247+01:00"
