@@ -53,6 +53,16 @@ spec:
  
     spec:
       containers:
+        - command:
+          - /bin/apache_exporter
+          - --scrape_uri=http://127.0.0.1/server-status?auto
+          image: lusotycoon/apache-exporter
+          imagePullPolicy: Always
+          name: metrics
+          ports:
+          - containerPort: 9117
+            name: metrics
+            protocol: TCP
         - image: {{.Values.image}}
           imagePullPolicy: Always
           name: wordpress
