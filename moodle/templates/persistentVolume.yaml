@@ -8,5 +8,5 @@ spec:
   resources:
     requests:
       storage: {{ .Values.storage }}
-    storageClassName: {{ .Values.storageClass }}
+  storageClassName: {{ .Values.storageClass }}
 
