@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - command:
-          - --nginx.scrape-uri=http://127.0.0.1:80/stub_status
+          - --nginx.scrape-uri=http://127.0.0.1:80/basic_status
           image: nginx/nginx-prometheus-exporter
           imagePullPolicy: Always
           name: metrics

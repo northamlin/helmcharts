@@ -12,7 +12,8 @@ url: demo.uggla.io
 SSLPROXY: true
 kubedomainname: appselinose
 dbhost: sql.sql.svc.cluster.local:3306
-
+storage: 10Gi
+storageClass: rook-cephfs
 
 hosting:
   tags: 

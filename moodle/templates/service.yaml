@@ -18,7 +18,7 @@ spec:
     - port: 9113
       targetPort: 80
       protocol: TCP
-      name: Metrics
+      name: metrics
   selector:
     app: {{ .Values.name }}-moodle-pod
 
