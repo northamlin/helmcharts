@@ -6,7 +6,7 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: {{ .Values.name }}{{ .Values.version }}-redis-pod
+      app: {{ .Values.name }}-redis-pod 
   template:
     metadata:
       labels:
