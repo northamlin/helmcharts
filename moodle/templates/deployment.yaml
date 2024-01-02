@@ -13,7 +13,7 @@ spec:
         app: {{ .Values.name }}-moodle-pod 
     spec:
       containers:
-        - command:
+        - args:
           - --nginx.scrape-uri=http://127.0.0.1:80/basic_status
           image: nginx/nginx-prometheus-exporter
           imagePullPolicy: Always
