@@ -2,15 +2,31 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 name: matte-moodle
-repo: mattiashem
-image: moodle:v38
+repo: elino
+image: moodle:v4.3.2
 dbuser: moodle
 dbpass: password
 proto: https
-image_base: mattiashem
-url: demo.utbild.se
+image_base: elino
+url: demo.uggla.io
 SSLPROXY: true
 kubedomainname: appselinose
 dbhost: sql.sql.svc.cluster.local:3306
 
 
+hosting:
+  tags: 
+    norh/deployname: moodle
+    norh/resources: low
+    norh/deploydate: date
+    norh/userid: userid
+    norh/id: idss
+  id:
+    - 1234-1234-22333
+  repo: github.com/elino/helmrepo/moodle
+
+
+resource: 
+#Only for custom
+cpu: 100m
+memory: 128Mi

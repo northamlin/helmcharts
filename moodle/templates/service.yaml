@@ -4,6 +4,10 @@ metadata:
   name: {{ .Values.name }}-service
   labels:
     app: {{ .Values.name }}-moodle-pod
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9113"
+    prometheus.io/path: /metrics
 spec:
   type: ClusterIP
   ports:
@@ -11,6 +15,10 @@ spec:
       targetPort: 80
       protocol: TCP
       name: http
+    - port: 9113
+      targetPort: 80
+      protocol: TCP
+      name: Metrics
   selector:
     app: {{ .Values.name }}-moodle-pod
 

@@ -13,6 +13,15 @@ spec:
         app: {{ .Values.name }}-moodle-pod 
     spec:
       containers:
+        - command:
+          - --nginx.scrape-uri=http://127.0.0.1:80/stub_status
+          image: nginx/nginx-prometheus-exporter
+          imagePullPolicy: Always
+          name: metrics
+          ports:
+          - containerPort: 9113
+            name: metrics
+            protocol: TCP
         - image: {{ .Values.image_base }}/{{.Values.image}}
           imagePullPolicy: Always
           name: {{ .Values.name }}-pod
@@ -35,8 +44,35 @@ spec:
             - containerPort: 80
               name: moodle
           resources:
+          {{ if eq .Values.resource "low" }}
             requests:
-              cpu: 100m
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          {{ else if eq .Values.resource "medium" }}
+            requests:
+              memory: "256Mi"
+              cpu: "500m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          {{ else if eq .Values.resource "high" }}
+            requests:
+              memory: "2048Mi"
+              cpu: "1000m"
+            limits:
+              memory: "4096Mi"
+              cpu: "2000m"
+          {{ else if eq .Values.resource "custom" }}
+            requests:
+              memory: {{ .Values.memory }}
+              cpu: {{ .Values.cpu }}
+            limits:
+              memory: {{ .Values.memory }}
+              cpu: {{ .Values.cpu }}
+          {{ end }}
           volumeMounts:
             - name: moodle-persistent-storage
               mountPath: /var/www/html/shared
