@@ -3,3 +3,19 @@ appVersion: "1.0"
 description: A Helm chart for deploying Wordpress on Elino or Northamlin Cloud
 name: wordpress
 version: 0.7.0
+page:
+  swe: "Wordpress är en blog moteringsplattform"
+  eng: "wordpress is a blog hosting platform"
+  img:
+    - https://www.google.com/img/wordpress.png
+    - https://www.google.com/img/wordpress2.png
+  link: https://www.wordpress.com
+  tags:
+    - blog
+    - hosting
+    - cms
+  title:
+    swe: "Wordpress"
+    eng: "Wordpress"
+
+

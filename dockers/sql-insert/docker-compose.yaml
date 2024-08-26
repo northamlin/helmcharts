@@ -1,15 +1,18 @@
 services:
   sql:
     build: .
-    command: tail -f /etc/fstab
+    image: elino/sql-client
+    #command: tail -f /etc/fstab
     depends_on:
       - mysql
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: keycloak
-      MYSQL_USER: keycloak
+      MYSQL_DATABASE: matte
+      MYSQL_USER:  matte
       MYSQL_PASSWORD: password
       MYSQL_DATAFILE: wordpress
+      MYSQL_HOST: mysql
+      MYSQL_DATAFILE_URL: https://raw.githubusercontent.com/northamlin/helmcharts/master/dockers/sql-insert/db/wordpress.sql
     volumes:
       - .:/sql
   mysql:

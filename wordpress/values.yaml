@@ -16,7 +16,7 @@ dbuser: wordpress
 dbpass: wordpress
 dbname: wordpress
 dbprefix: wp_
-
+dburl: https://raw.githubusercontent.com/northamlin/helmcharts/master/dockers/sql-insert/db/wordpress.sql
 
 wpuser: admin
 wppass: admin

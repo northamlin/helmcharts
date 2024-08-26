@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sql-init-{{ .Values.name }}-{{ .Values.uuid }}
+spec:
+  template:
+    spec:
+      containers:
+      - name: init-sql
+        image: elino/sql-client
+        env:
+          - name: MYSQL_HOST
+            value: {{ .Values.dbhost }}
+          - name: MYSQL_USER
+            valueFrom:
+               secretKeyRef:
+                 name: {{ .Values.name }}-{{ .Values.uuid }}
+                 key: SQL_USER
+          - name: MYSQL_PASSWORD
+            valueFrom:
+               secretKeyRef:
+                 name: {{ .Values.name }}-{{ .Values.uuid }}
+                 key: SQL_PASSWORD
+          - name: MYSQL_DATABASE
+            value: {{ .Values.dbname }}
+          - name: MYSQL_DATAFILE_URL
+            value: {{ .Values.dburl }}
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+               secretKeyRef:
+                 name: mysql-cluster
+                 key: ROOT_PASSWORD
+      restartPolicy: Never
+

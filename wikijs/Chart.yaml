@@ -3,3 +3,17 @@ appVersion: "1.0"
 description: Install wiki.js with localdb
 name: wikijs
 version: 0.1.0
+page:
+  swe: "Wikijs"
+  eng: "Wikijs"
+  img:
+    - https://www.uggla.io/img/wikijs.png
+    - https://www.uggla.io/img/wikijs2.png
+  link: https://www.moodle.com
+  tags:
+    - blog
+    - hosting
+    - cms
+  title:
+    swe: "Wikijs"
+    eng: "Wikijs"

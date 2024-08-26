@@ -3,3 +3,17 @@ appVersion: "1.0"
 description: Moodle helmchart for elino and northamlin cloud
 name: moodle
 version: 0.1.0
+page:
+  swe: "Moodle"
+  eng: "Moodle"
+  img:
+    - https://www.uggla.io/img/moodle.png
+    - https://www.uggla.io/img/moodle.png
+  link: https://www.moodle.com
+  tags:
+    - blog
+    - hosting
+    - cms
+  title:
+    swe: "Moodle"
+    eng: "Moodle"
