@@ -1,0 +1,34 @@
+name: nameof-app
+namespaceApp: argocd
+destNamespace: nameof-namespace
+destCluster: https://kubernetes.default.svc
+project: nameof-project
+chart: nameof-chart
+repoURL: https://raw.githubusercontent.com/northamlin/helmcharts/master/
+targetRevision: 0.1.0
+releaseName: nameof-release
+value: |
+    replicaCount: 1
+    uuid: 00000
+    name: newton
+    repo: elino
+    image: moodle:v4.3.2
+    url: newton.uggla.io
+    version: 1
+    dbhost: main-mysql-master.uggla.svc.cluster.local
+    dbuser: newton-uggla
+    dbpass: newtonuggla
+    dbname: newton
+    resource: high
+    storage: 10Gi
+    storageClass: rook-ceph
+    hosting:
+      tags: 
+        norh/deployname: moodle
+        norh/resources: high
+        norh/deploydate: 2023-10-02
+        norh/userid: mattias
+        norh/id: 1234-1234-22333
+      id:
+        - 1234-1234-22333
+      repo: https://raw.githubusercontent.com/northamlin/helmcharts/master/

@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Values.namespaceApp }}
+spec:
+  project: {{ .Values.project }}
+  source:
+    chart: {{ .Values.chart }}
+    repoURL: {{ .Values.repoURL }}
+    targetRevision: {{ .Values.targetRevision }}
+    helm:
+      releaseName: {{ .Values.releaseName }}
+      values: |
+         {{ .Values.value | nindent 12 }}
+  destination:
+    server: {{ .Values.destCluster }}
+    namespace: {{ .Values.destNamespace }}
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
