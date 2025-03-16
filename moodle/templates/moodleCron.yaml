@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: moodle-cron
+  name:  {{ .Values.name }}-cron
 spec:
   schedule: "*/15 * * * *"
   jobTemplate:
@@ -13,7 +13,7 @@ spec:
             image: mattiashem/moodle-cron
             env:
               - name: SITE
-                value: {{ .Values.url }}
+                value: {{ .Values.name }}-service
               - name: PASSWORD
-                value: "mattias"
+                value: {{ .Values.cronSecret }}
           restartPolicy: Never 

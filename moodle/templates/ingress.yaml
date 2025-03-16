@@ -21,6 +21,13 @@ spec:
         paths:
           - backend:
               service:
+                name: {{ .Values.name }}-sidecar
+                port:
+                    number: 8080
+            path: /uggla
+            pathType: Prefix
+          - backend:
+              service:
                 name: {{ .Values.name }}-service
                 port:
                     number: 80

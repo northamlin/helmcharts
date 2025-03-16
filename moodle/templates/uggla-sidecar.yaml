@@ -1,0 +1,156 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}-sidecar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.name }}-sidecar 
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.name }}-sidecar 
+    spec:
+      volumes:
+        - name: uggla-google-key
+          secret:
+            secretName: uggla-google-key
+      containers:
+        - image: mattiashem/uggla-sidecar
+          imagePullPolicy: Always
+          name: sidecar
+          env:
+            - name:  SCHOOL_URL
+              value: "{{ .Values.proto }}://{{ .Values.url }}/webservice/rest/server.php"
+            - name:  SCHOOL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.name }}-sidecar
+                  key: SCHOOL_TOKEN
+            - name:  SCHOOL_NAME
+              value: {{ .Values.name }}
+            - name:  SCHOOL_FOLDER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.name }}-sidecar
+                  key: SCHOOL_FOLDER
+            - name: ELASTICSEARCH_HOST
+              value: "elasticsearch"
+            - name: ELASTICSEARCH_PORT
+              value: "9200"
+            - name: ELASTICSEARCH_INDEX
+              value: "uggla"
+            - name: ELASTICSEARCH_USER
+              value: elastic
+            - name: ELASTICSEARCH_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.name }}-sidecar
+                  key: ELASTICSEARCH_PASS
+          ports:
+            - containerPort: 8080
+              name: sidecar
+          volumeMounts:
+            - name: uggla-google-key
+              readOnly: true
+              mountPath: "/code/secrets/"
+          #livenessProbe:
+          # httpGet:
+          #   path: /healthz/index.html
+          #   port: 80
+          #   httpHeaders:
+          #   - name: X-Custom-Header
+          #     value: Awesome
+          # initialDelaySeconds: 180
+          # periodSeconds: 3
+          #readinessProbe:
+          # httpGet:
+          #   path: /healthz/index.html
+          #   port: 80
+          #   httpHeaders:
+          #   - name: X-Custom-Header
+          #     value: Awesome
+          # initialDelaySeconds: 180
+          # periodSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.name }}-sidecar
+  labels:
+    app: {{ .Values.name }}-sidecar
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ .Values.name }}-sidecar
+
+--- 
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.name }}-sidecar
+data:
+  SCHOOL_TOKEN: MzEyOWEwYzE3NDU5NGZiMjU0OWZkODg1NTAyMDA5ODc=
+  SCHOOL_FOLDER: MUN4MU1KU3RfeDFJakRyYnJGMVUyV0hrMVZTTlFUOTdS
+  ELASTICSEARCH_PASS: Y2huYWdlbWU=
+---
+
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name:  {{ .Values.name }}-cron-reports
+spec:
+  schedule: "00 06 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+            volumes:
+              - name: uggla-google-key
+                secret:
+                  secretName: uggla-google-key
+            containers:
+              - image: mattiashem/uggla-sidecar
+                imagePullPolicy: Always
+                name: report
+                command: ["python", "/code/run.py"]
+                env:
+                  - name:  SCHOOL_URL
+                    value: "{{ .Values.proto }}://{{ .Values.url }}/webservice/rest/server.php"
+                  - name:  SCHOOL_TOKEN
+                    valueFrom:
+                      secretKeyRef:
+                        name: {{ .Values.name }}-sidecar
+                        key: SCHOOL_TOKEN
+                  - name:  SCHOOL_NAME
+                    value: {{ .Values.name }}
+                  - name:  SCHOOL_FOLDER
+                    valueFrom:
+                      secretKeyRef:
+                        name: {{ .Values.name }}-sidecar
+                        key: SCHOOL_FOLDER
+                  - name: ELASTICSEARCH_HOST
+                    value: "elasticsearch"
+                  - name: ELASTICSEARCH_PORT
+                    value: "9200"
+                  - name: ELASTICSEARCH_INDEX
+                    value: "uggla"
+                  - name: ELASTICSEARCH_USER
+                    value: elastic
+                  - name: ELASTICSEARCH_PASS
+                    valueFrom:
+                      secretKeyRef:
+                        name: {{ .Values.name }}-sidecar
+                        key: ELASTICSEARCH_PASS
+                volumeMounts:
+                  - name: uggla-google-key
+                    readOnly: true
+                    mountPath: "/code/secrets/"
+            restartPolicy: Never 

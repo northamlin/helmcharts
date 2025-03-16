@@ -1,19 +1,27 @@
 # Default values for wordpress.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
-name: matte-moodle
+name: moodle
 repo: elino
-image: moodle:v4.3.2
-dbuser: moodle
+image: moodle:v4.4.0
+#dbuser: moodle we use name instead
 dbpass: password
 proto: https
 image_base: elino
 url: demo.uggla.io
 SSLPROXY: true
 kubedomainname: appselinose
-dbhost: sql.sql.svc.cluster.local:3306
+dbhost: main-mysql-master.code.svc
+dbport: 3306
 storage: 10Gi
-storageClass: rook-cephfs
+storageClass: default
+seedSource: https://storage.googleapis.com/elino-public-assets/sql/moodle/uggla_seed.sql
+seed: "true"
+adminPasswordSecret: mysql-cluster
+adminPasswordSecretValue: ROOT_PASSWORD
+cronUrl: https://storage.googleapis.com/elino-public-assets/sql/moodle/moodle-cron.tar.gz
+cronSecret: moodle-cron
+
 
 hosting:
   tags: 

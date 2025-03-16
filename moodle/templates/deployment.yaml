@@ -24,16 +24,16 @@ spec:
             protocol: TCP
         - image: {{ .Values.image_base }}/{{.Values.image}}
           imagePullPolicy: Always
-          name: {{ .Values.name }}-pod
+          name: moodle
           env:
             - name: DBHOST
-              value: {{ .Values.dbhost}}
+              value: {{ .Values.dbhost}}:{{ .Values.dbport }}
             - name: REDIS
               value: {{ .Values.name}}-redis-service
             - name: PROTO
               value: {{ .Values.proto}}
             - name: DBUSER
-              value: {{ .Values.dbuser }}
+              value: {{ .Values.name }}
             - name: DBPASS
               value: '{{ .Values.dbpass }}'
             - name: SITENAME

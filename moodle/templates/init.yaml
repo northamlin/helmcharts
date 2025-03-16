@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.name }}-db-init
+spec:
+  template:
+    spec:
+      containers:
+      - name: db-init
+        image: mattiashem/init
+        env:
+          - name: DEST_DBPASS
+            value: "{{ .Values.dbpass }}"
+          - name: DEST_DBUSER
+            value: "{{ .Values.name }}"
+          - name: DEST_DB
+            value: "{{ .Values.name }}"
+          - name: DBHOST
+            value: "{{ .Values.dbhost }}"
+          - name: ROOT
+            value: "root"
+          - name: ROOTPASS
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.adminPasswordSecret }}
+                key: {{ .Values.adminPasswordSecretValue }}
+          - name: SEED_DB
+            value: "{{ .Values.seed }}"
+          - name: SEED_SOURCE
+            value: "{{ .Values.seedSource }}"
+
+      restartPolicy: Never

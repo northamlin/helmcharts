@@ -4,7 +4,7 @@ metadata:
   name: {{ .Values.name }}-moodle-disk
 spec:
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: {{ .Values.storage }}
