@@ -1,0 +1,28 @@
+kind: Ingress
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: "{{ .Values.url }}"
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    cert-manager.io/cluster-issuer: "http"
+    kubernetes.io/tls-acme: "true"
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure,web
+    {{-  range $key, $topping := $.Values.hosting.tags }}
+    {{ $key }}: {{ $topping }}
+    {{- end }}
+spec:
+  tls:
+  - hosts:
+    - {{ .Values.url }}
+    secretName: {{ .Values.url }}
+  rules:
+    - host: {{ .Values.url }}
+      http:
+        paths:
+          - backend:
+              service:
+                name: {{ .Values.name }}-{{ .Values.uuid }}
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix

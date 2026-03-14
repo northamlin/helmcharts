@@ -1,0 +1,22 @@
+replicaCount: 1
+
+uuid: hbdftsrfed
+name: radicale
+image: tomsquest/docker-radicale
+url: radicale.example.com
+
+storage: 1Gi
+storageClass: standard
+
+auth:
+  type: imap
+  imapHost: postfix-internal
+  imapSecurity: none
+
+hosting:
+  tags:
+    host/deployname: radicale
+    host/resources: low
+    host/deploydate: date
+    host/userid: userid
+    host/id: idss

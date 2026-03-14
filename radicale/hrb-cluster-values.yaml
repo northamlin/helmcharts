@@ -1,0 +1,20 @@
+uuid: hrb01
+name: radicale
+image: tomsquest/docker-radicale
+url: cal.server.robots.beer
+
+storageClass: hcloud-volumes
+storage: 1Gi
+
+auth:
+  type: imap
+  imapHost: postfix-internal
+  imapSecurity: none
+
+hosting:
+  tags:
+    host/deployname: radicale-hrb
+    host/resources: low
+    host/deploydate: "2026-03-13"
+    host/userid: hrb
+    host/id: hrb01

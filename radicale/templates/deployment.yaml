@@ -1,0 +1,78 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ .Values.name }}-{{ .Values.uuid }}-disk
+  annotations:
+      {{-  range $key, $topping := $.Values.hosting.tags }}
+      {{ $key }}: {{ $topping }}
+      {{- end }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.storage }}
+  storageClassName: {{ .Values.storageClass }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}-{{ .Values.uuid }}
+  annotations:
+      {{-  range $key, $topping := $.Values.hosting.tags }}
+      {{ $key }}: {{ $topping }}
+      {{- end }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.name }}-{{ .Values.uuid }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.name }}-{{ .Values.uuid }}
+    spec:
+      containers:
+        - image: {{ .Values.image }}
+          imagePullPolicy: Always
+          name: {{ .Values.name }}
+          ports:
+            - containerPort: 5232
+              name: http
+          resources:
+            requests:
+              cpu: 100m
+          volumeMounts:
+            - name: config
+              mountPath: /etc/radicale/config
+              subPath: radicale.conf
+            - name: data
+              mountPath: /var/lib/radicale/collections
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Values.name }}-{{ .Values.uuid }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.name }}-{{ .Values.uuid }}-disk
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.name }}-{{ .Values.uuid }}
+  labels:
+    app: {{ .Values.name }}-{{ .Values.uuid }}
+  annotations:
+      {{-  range $key, $topping := $.Values.hosting.tags }}
+      {{ $key }}: {{ $topping }}
+      {{- end }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 5232
+      protocol: TCP
+  selector:
+    app: {{ .Values.name }}-{{ .Values.uuid }}

@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.name }}-{{ .Values.uuid }}
+  annotations:
+      {{-  range $key, $topping := $.Values.hosting.tags }}
+      {{ $key }}: {{ $topping }}
+      {{- end }}
+data:
+  radicale.conf: |
+    [server]
+    hosts = 0.0.0.0:5232
+
+    [auth]
+    type = {{ .Values.auth.type }}
+    imap_host = {{ .Values.auth.imapHost }}
+    imap_security = {{ .Values.auth.imapSecurity }}
+
+    [storage]
+    filesystem_folder = /var/lib/radicale/collections
+
+    [logging]
+    level = info
