@@ -1,6 +1,13 @@
 # Radicale Helm Chart
 
-Helm chart for [Radicale](https://github.com/tomsquest/docker-radicale) — a CalDAV/CardDAV server.
+Lightweight open-source CalDAV and CardDAV server. Radicale lets you self-host your calendars, to-do lists and contacts with minimal configuration and a tiny resource footprint.
+
+Read more: https://radicale.org
+
+Helm chart uses image: [tomsquest/docker-radicale](https://github.com/tomsquest/docker-radicale)
+
+- **Chart version**: 0.1.0
+- **App version**: latest
 
 ## Deploy
 
