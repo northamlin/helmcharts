@@ -54,7 +54,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: mysql
+  # Was literally `mysql` -- not templated, so two of these charts in one owner's
+  # namespace fought over the same Service. The apps address it by the same derived
+  # name, so nothing needs to pass dbhost in.
+  name: {{ .Values.name }}-{{ .Values.uuid }}-mysql
   labels:
     app: {{ .Values.name }}-mysql-pod
 spec:
@@ -88,4 +91,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 50Gi
+      storage: {{ .Values.dbStorage }}
+  # Without this the claim falls to the cluster default, which on eu-upcloud-1 is
+  # upcloud-block-storage-maxiops, not `standard`.
+  storageClassName: {{ .Values.storageClass }}

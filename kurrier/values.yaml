@@ -4,7 +4,7 @@
 
 uuid: hbdftsrfed
 name: kurrier
-url: mail.server.robots.beer
+url: mail.eu-up.apps.robots.beer
 
 webImage: ghcr.io/kurrier-org/kurrier-web:v1.1.11
 workerImage: ghcr.io/kurrier-org/kurrier-worker:v1.1.11
@@ -34,6 +34,9 @@ secretKeyBase: changeme
 vaultEncKey: changeme-min-32-characters-long!!
 dashboardUsername: admin
 dashboardPassword: changeme
+
+adminEmail: admin@example.com
+adminPassword: changeme
 
 # Supabase
 supabasePublicUrl: http://localhost:8000

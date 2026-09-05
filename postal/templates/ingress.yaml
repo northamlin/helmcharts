@@ -1,20 +1,24 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name:  {{ .Values.name }}
+  name: "{{ .Values.url }}"
   labels:
-    app:  {{ .Values.name }}
+    app: {{ .Values.name }}
   annotations:
-    kubernetes.io/ingress.class: "traefik"
-    cert-manager.io/cluster-issuer: "letsencrypt"
+    cert-manager.io/cluster-issuer: "http"
     kubernetes.io/tls-acme: "true"
     traefik.ingress.kubernetes.io/router.entrypoints: websecure,web
-    external-dns.alpha.kubernetes.io/target: "lb..apps.elino.se"
-    external-dns.alpha.kubernetes.io/hostname:  {{ .Values.name }}.apps.elino.se
-
+    {{- range $key, $topping := (default dict (default dict .Values.hosting).tags) }}
+    {{ $key }}: {{ $topping }}
+    {{- end }}
 spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - {{ .Values.url }}
+    secretName: {{ .Values.url }}
   rules:
-    - host: {{ .Values.name }}.apps.elino.se
+    - host: {{ .Values.url }}
       http:
         paths:
           - path: /
@@ -24,7 +28,3 @@ spec:
                 name: {{ .Values.name }}-web
                 port:
                   number: 80
-  tls:
-  - secretName: tls-{{ .Values.name }}-cert
-    hosts:
-    - {{ .Values.name }}.apps.elino.se

@@ -7,6 +7,7 @@
 
 
 name: postal
+url: postal.eu-up.apps.robots.beer
 image: ghcr.io/postalserver/postal
 dbuser: postal
 dbpass: password
@@ -45,3 +46,11 @@ smtp:
 
 rails:
   secret_key: 37d184a591cf2b02566f76656479661624f56f1b5843ffda1c7d11934658592f505af3b538ee8a6e2f9a54d6664840b4dd8ecdb83d24a10fbbc70cc46341c80db1fd2631fa2d2f666906616c95dc7eb04ba6513ade96c0c13d044f61f167c66a901ca649fc5bc9475ba1abc77b54f89644cb9a7867f0a78c36572dc8377ef42f
+
+hosting:
+  tags:
+    norh/deployname: postal
+    norh/resources: low
+    norh/deploydate: date
+    norh/userid: userid
+    norh/id: idss

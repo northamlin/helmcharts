@@ -34,19 +34,42 @@ spec:
       labels:
         app: {{ .Values.name }}-{{ .Values.uuid }}-web
     spec:
+      initContainers:
+        - name: db-bootstrap
+          image: postgres:16-alpine
+          command: ["/bin/bash", "/bootstrap/db-bootstrap.sh"]
+          env:
+            - name: PGHOST
+              value: {{ .Values.name }}-{{ .Values.uuid }}-pg-rw
+            - name: PGUSER
+              value: {{ .Values.dbuser }}
+            - name: PGDATABASE
+              value: {{ .Values.dbname }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.name }}-{{ .Values.uuid }}
+                  key: POSTGRES_PASSWORD
+            - name: ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.name }}-{{ .Values.uuid }}
+                  key: ADMIN_EMAIL
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.name }}-{{ .Values.uuid }}
+                  key: ADMIN_PASSWORD
+          volumeMounts:
+            - name: db-bootstrap-script
+              mountPath: /bootstrap
+            - name: db-migrations
+              mountPath: /scripts/migrations
       containers:
         - image: {{ .Values.webImage }}
           imagePullPolicy: Always
           name: web
           env:
-            - name: WEB_PORT
-              value: "3000"
-            - name: WEB_URL
-              value: https://{{ .Values.url }}
-            - name: DATABASE_URL
-              value: postgres://{{ .Values.dbuser }}:$(POSTGRES_PASSWORD)@{{ .Values.name }}-{{ .Values.uuid }}-pg-rw:5432/{{ .Values.dbname }}
-            - name: DATABASE_RLS_URL
-              value: postgres://rls_client:$(RLS_CLIENT_PASSWORD)@{{ .Values.name }}-{{ .Values.uuid }}-pg-rw:5432/{{ .Values.dbname }}
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -57,6 +80,14 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.name }}-{{ .Values.uuid }}
                   key: RLS_CLIENT_PASSWORD
+            - name: WEB_PORT
+              value: "3000"
+            - name: WEB_URL
+              value: https://{{ .Values.url }}
+            - name: DATABASE_URL
+              value: postgres://{{ .Values.dbuser }}:$(POSTGRES_PASSWORD)@{{ .Values.name }}-{{ .Values.uuid }}-pg-rw:5432/{{ .Values.dbname }}
+            - name: DATABASE_RLS_URL
+              value: postgres://rls_client:$(RLS_CLIENT_PASSWORD)@{{ .Values.name }}-{{ .Values.uuid }}-pg-rw:5432/{{ .Values.dbname }}
             - name: API_PUBLIC_URL
               value: {{ .Values.supabasePublicUrl }}
             - name: API_URL
@@ -140,6 +171,20 @@ spec:
               port: 3000
             initialDelaySeconds: 15
             periodSeconds: 5
+      volumes:
+        - name: db-bootstrap-script
+          configMap:
+            name: {{ .Values.name }}-{{ .Values.uuid }}-db-bootstrap
+            defaultMode: 0755
+            items:
+              - key: db-bootstrap.sh
+                path: db-bootstrap.sh
+        - name: db-migrations
+          configMap:
+            name: {{ .Values.name }}-{{ .Values.uuid }}-db-bootstrap
+            items:
+              - key: initialize-schema.sql
+                path: initialize-schema.sql
 ---
 # Kurrier Worker
 apiVersion: apps/v1
@@ -160,21 +205,48 @@ spec:
       labels:
         app: {{ .Values.name }}-{{ .Values.uuid }}-worker
     spec:
+      initContainers:
+        - name: init-dav-dirs
+          image: busybox
+          command: ["mkdir", "-p", "/dav-data/db"]
+          volumeMounts:
+            - name: dav-data
+              mountPath: /dav-data
+        - name: db-bootstrap
+          image: postgres:16-alpine
+          command: ["/bin/bash", "/bootstrap/db-bootstrap.sh"]
+          env:
+            - name: PGHOST
+              value: {{ .Values.name }}-{{ .Values.uuid }}-pg-rw
+            - name: PGUSER
+              value: {{ .Values.dbuser }}
+            - name: PGDATABASE
+              value: {{ .Values.dbname }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.name }}-{{ .Values.uuid }}
+                  key: POSTGRES_PASSWORD
+            - name: ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.name }}-{{ .Values.uuid }}
+                  key: ADMIN_EMAIL
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.name }}-{{ .Values.uuid }}
+                  key: ADMIN_PASSWORD
+          volumeMounts:
+            - name: db-bootstrap-script
+              mountPath: /bootstrap
+            - name: db-migrations
+              mountPath: /scripts/migrations
       containers:
         - image: {{ .Values.workerImage }}
           imagePullPolicy: Always
           name: worker
           env:
-            - name: WEB_PORT
-              value: "3000"
-            - name: WEB_URL
-              value: https://{{ .Values.url }}
-            - name: NITRO_PORT
-              value: "3001"
-            - name: DATABASE_URL
-              value: postgres://{{ .Values.dbuser }}:$(POSTGRES_PASSWORD)@{{ .Values.name }}-{{ .Values.uuid }}-pg-rw:5432/{{ .Values.dbname }}
-            - name: DATABASE_RLS_URL
-              value: postgres://rls_client:$(RLS_CLIENT_PASSWORD)@{{ .Values.name }}-{{ .Values.uuid }}-pg-rw:5432/{{ .Values.dbname }}
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -185,6 +257,16 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.name }}-{{ .Values.uuid }}
                   key: RLS_CLIENT_PASSWORD
+            - name: WEB_PORT
+              value: "3000"
+            - name: WEB_URL
+              value: https://{{ .Values.url }}
+            - name: NITRO_PORT
+              value: "3001"
+            - name: DATABASE_URL
+              value: postgres://{{ .Values.dbuser }}:$(POSTGRES_PASSWORD)@{{ .Values.name }}-{{ .Values.uuid }}-pg-rw:5432/{{ .Values.dbname }}
+            - name: DATABASE_RLS_URL
+              value: postgres://rls_client:$(RLS_CLIENT_PASSWORD)@{{ .Values.name }}-{{ .Values.uuid }}-pg-rw:5432/{{ .Values.dbname }}
             - name: API_PUBLIC_URL
               value: {{ .Values.supabasePublicUrl }}
             - name: API_URL
@@ -254,3 +336,22 @@ spec:
               memory: {{ .Values.memory }}
               cpu: {{ .Values.cpu }}
           {{ end }}
+          volumeMounts:
+            - name: dav-data
+              mountPath: /dav-data
+      volumes:
+        - name: dav-data
+          emptyDir: {}
+        - name: db-bootstrap-script
+          configMap:
+            name: {{ .Values.name }}-{{ .Values.uuid }}-db-bootstrap
+            defaultMode: 0755
+            items:
+              - key: db-bootstrap.sh
+                path: db-bootstrap.sh
+        - name: db-migrations
+          configMap:
+            name: {{ .Values.name }}-{{ .Values.uuid }}-db-bootstrap
+            items:
+              - key: initialize-schema.sql
+                path: initialize-schema.sql

@@ -1,0 +1,8 @@
+# Per-cluster install values. These are `helm install -f` inputs, not chart content,
+# and kurrier/hrb-cluster-values.yaml holds live credentials -- it must never be
+# committed to this repo, which is public. (radicale's predates this rule and is
+# already tracked; it contains no secrets. gitignore does not untrack it.)
+*-cluster-values.yaml
+
+# Editor/agent state that has no business in a chart tarball.
+.claude/

@@ -22,7 +22,7 @@ spec:
           name: {{ .Values.name }}
           env:
             - name: MAUTIC_DB_HOST
-              value: '{{ .Values.dbhost}}'
+              value: '{{ .Values.name }}-{{ .Values.uuid }}-mysql'
             - name: MAUTIC_DB_USER
               valueFrom:
                  secretKeyRef:

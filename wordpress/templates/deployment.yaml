@@ -68,7 +68,10 @@ spec:
           name: wordpress
           env:
             - name: WORDPRESS_DB_HOST
-              value: {{ .Values.dbhost }}
+              # Derived, not .Values.dbhost -- this chart brings its own MysqlCluster
+              # and run.robots.beer's deploy.js hardcodes dbhost to "mysql", which is
+              # not a Service anything here creates. Same shape moodle already uses.
+              value: {{ .Values.name }}-{{ .Values.uuid }}-mysql-master
             - name: WORDPRESS_DB_USER
               valueFrom:
                  secretKeyRef:

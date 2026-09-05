@@ -9,7 +9,23 @@ dbuser: wiki
 dbpass: password
 dbname: wiki
 dburl: ""
-url: wiki.apps.northamlin.com
-dbhost: mysql
+url: wiki.eu-up.apps.robots.beer
+# NOTE: this chart runs its own MySQL (templates/mysql.yaml) and the app addresses it
+# at <name>-<uuid>-mysql, derived in the templates. `dbhost` is not read any more --
+# run.robots.beer's deploy.js hardcodes it to "mysql", which was never a Service this
+# chart created once the name was templated.
+# dbhost: mysql
 
+hosting:
+  tags:
+    norh/deployname: wikijs
+    norh/resources: low
+    norh/deploydate: date
+    norh/userid: userid
+    norh/id: idss
 
+# The in-chart MySQL Deployment's disk. `standard` is the platform's UpCloud maxiops
+# class on eu-upcloud-1; it is deliberately not the cluster default, so a claim that
+# names nothing lands somewhere else.
+storageClass: standard
+dbStorage: 20Gi

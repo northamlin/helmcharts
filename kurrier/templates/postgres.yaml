@@ -11,7 +11,7 @@ spec:
       secret:
         name: {{ .Values.name }}-{{ .Values.uuid }}
   superuserSecret:
-    name: {{ .Values.name }}-{{ .Values.uuid }}
+    name: {{ .Values.name }}-{{ .Values.uuid }}-pg-superuser
   storage:
     size: {{ .Values.dbStorage }}
     storageClass: {{ .Values.storageClass }}

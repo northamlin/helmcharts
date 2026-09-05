@@ -5,3 +5,6 @@
 deployname: slackbot
 gitsha: latest
 slacktoken: token
+
+# Was hardcoded to `ebs-sc`, an EKS class that does not exist on eu-upcloud-1.
+storageClass: standard

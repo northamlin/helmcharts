@@ -10,7 +10,7 @@ spec:
         image: elino/sql-client
         env:
           - name: MYSQL_HOST
-            value: {{ .Values.dbhost }}
+            value: {{ .Values.name }}-{{ .Values.uuid }}-mysql-master
           - name: MYSQL_USER
             valueFrom:
                secretKeyRef:

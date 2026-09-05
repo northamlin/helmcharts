@@ -13,15 +13,15 @@ value: |
     name: newton
     repo: elino
     image: moodle:v4.3.2
-    url: newton.uggla.io
+    url: example.eu-up.apps.robots.beer
     version: 1
-    dbhost: main-mysql-master.uggla.svc.cluster.local
+    dbhost: newton-00000-mysql-master
     dbuser: newton-uggla
     dbpass: newtonuggla
     dbname: newton
     resource: high
     storage: 10Gi
-    storageClass: rook-ceph
+    storageClass: standard
     hosting:
       tags: 
         norh/deployname: moodle

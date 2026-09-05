@@ -18,7 +18,7 @@ spec:
           name: {{ .Values.name }}-pod
           env:
             - name: DB_HOST
-              value: {{ .Values.dbhost}}
+              value: {{ .Values.name }}-{{ .Values.uuid }}-mysql
             - name: DB_TYPE
               value: mysql
             - name: DB_PORT

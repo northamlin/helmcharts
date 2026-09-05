@@ -87,6 +87,18 @@ spec:
   selector:
     app: {{ .Values.name }}-{{ .Values.uuid }}-kong
 ---
+# Kong alias service (app expects hostname "kong" from default Supabase Docker Compose setup)
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong
+spec:
+  type: ExternalName
+  externalName: {{ .Values.name }}-{{ .Values.uuid }}-kong.{{ .Release.Namespace }}.svc.cluster.local
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
 # GoTrue Auth
 apiVersion: apps/v1
 kind: Deployment
@@ -107,6 +119,11 @@ spec:
           imagePullPolicy: IfNotPresent
           name: auth
           env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.name }}-{{ .Values.uuid }}
+                  key: POSTGRES_PASSWORD
             - name: GOTRUE_API_HOST
               value: "0.0.0.0"
             - name: GOTRUE_API_PORT
@@ -117,11 +134,6 @@ spec:
               value: postgres
             - name: GOTRUE_DB_DATABASE_URL
               value: postgres://supabase_auth_admin:$(POSTGRES_PASSWORD)@{{ .Values.name }}-{{ .Values.uuid }}-pg-rw:5432/{{ .Values.dbname }}
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.name }}-{{ .Values.uuid }}
-                  key: POSTGRES_PASSWORD
             - name: GOTRUE_SITE_URL
               value: {{ .Values.siteUrl }}
             - name: GOTRUE_DISABLE_SIGNUP
@@ -206,15 +218,15 @@ spec:
           imagePullPolicy: IfNotPresent
           name: rest
           env:
-            - name: PGRST_DB_URI
-              value: postgres://authenticator:$(POSTGRES_PASSWORD)@{{ .Values.name }}-{{ .Values.uuid }}-pg-rw:5432/{{ .Values.dbname }}
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.name }}-{{ .Values.uuid }}
                   key: POSTGRES_PASSWORD
+            - name: PGRST_DB_URI
+              value: postgres://authenticator:$(POSTGRES_PASSWORD)@{{ .Values.name }}-{{ .Values.uuid }}-pg-rw:5432/{{ .Values.dbname }}
             - name: PGRST_DB_SCHEMAS
-              value: public,storage,graphql_public
+              value: public,storage
             - name: PGRST_DB_ANON_ROLE
               value: anon
             - name: PGRST_JWT_SECRET
@@ -291,13 +303,13 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.name }}-{{ .Values.uuid }}
                   key: JWT_SECRET
-            - name: DATABASE_URL
-              value: postgres://supabase_storage_admin:$(POSTGRES_PASSWORD)@{{ .Values.name }}-{{ .Values.uuid }}-pg-rw:5432/{{ .Values.dbname }}
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.name }}-{{ .Values.uuid }}
                   key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: postgres://supabase_storage_admin:$(POSTGRES_PASSWORD)@{{ .Values.name }}-{{ .Values.uuid }}-pg-rw:5432/{{ .Values.dbname }}
             - name: FILE_SIZE_LIMIT
               value: "52428800"
             - name: STORAGE_BACKEND

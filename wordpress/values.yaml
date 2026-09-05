@@ -8,7 +8,7 @@ replicaCount: 1
 uuid: hbdftsrfed
 name: wordpress
 image: wordpress
-url: wordpress-hosting.server.robots.beer
+url: wordpress.eu-up.apps.robots.beer
 version: 1
 
 dbhost: mysql
@@ -41,3 +41,6 @@ hosting:
     host/deploydate: date
     host/userid: userid
     host/id: idss
+
+# Disk for the chart's own MysqlCluster.
+dbStorage: 20Gi

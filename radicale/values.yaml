@@ -3,7 +3,7 @@ replicaCount: 1
 uuid: hbdftsrfed
 name: radicale
 image: tomsquest/docker-radicale
-url: radicale.example.com
+url: radicale.eu-up.apps.robots.beer
 
 storage: 1Gi
 storageClass: standard

@@ -5,13 +5,13 @@ name: moodle
 image: moodlehq/moodle-php-apache:8.2-bullseye
 dbpass: password
 proto: https
-url: moodle.server.robots.beer
+url: moodle.eu-up.apps.robots.beer
 dbport: 3306
 storage: 10Gi
 dbuser: moodle
 uuid: 12345
 
-storageClass: hcloud-volumes
+storageClass: standard
 seedSource: https://storage.googleapis.com/elino-public-assets/sql/moodle/uggla_seed.sql
 seed: "true"
 cronSecret: moodle-cron
@@ -23,24 +23,15 @@ mysql-cluster:
   mysqlPassword: password
   mysqlDatabase: moodle
 
+# The host, the Ingress name and the TLS secret name all come from the top-level
+# `url` value -- the same convention every other chart in this repo uses, and the
+# only value helmdeployer actually sets.
 ingress:
   enabled: true
   annotations:
-    kubernetes.io/ingress.class: traefik
     cert-manager.io/cluster-issuer: http
     kubernetes.io/tls-acme: "true"
     traefik.ingress.kubernetes.io/router.entrypoints: websecure,web
-
-  hosts:
-    - host: moodle.server.robots.beer
-      paths:
-        - path: /
-          pathType: Prefix
-
-  tls:
-    - secretName: moodle-tls
-      hosts:
-        - moodle.server.robots.beer
 
 service:
   annotations:
@@ -69,3 +60,6 @@ resource: low
 #Only for custom
 cpu: 100m
 memory: 128Mi
+
+# Disk for the chart's own MysqlCluster.
+dbStorage: 20Gi

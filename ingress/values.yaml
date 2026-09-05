@@ -1,8 +1,13 @@
-# Default values for wordpress.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
-hostname: example.local
+# Default values for the standalone ingress chart.
+# Points an existing in-cluster Service at a public hostname.
+hostname: example.eu-up.apps.robots.beer
 service: myhostservice
+port: 80
 
-
-
+hosting:
+  tags:
+    norh/deployname: ingress
+    norh/resources: low
+    norh/deploydate: date
+    norh/userid: userid
+    norh/id: idss

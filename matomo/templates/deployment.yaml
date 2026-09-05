@@ -22,7 +22,7 @@ spec:
           name: {{ .Values.name }}
           env:
             - name: MATOMO_DATABASE_HOST
-              value: {{ .Values.dbhost }}
+              value: {{ .Values.name }}-{{ .Values.uuid }}-mysql
             - name: MATOMO_DATABASE_USERNAME
               valueFrom:
                  secretKeyRef:

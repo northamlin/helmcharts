@@ -17,6 +17,9 @@ spec:
   volumeSpec:
     persistentVolumeClaim:
       accessModes: [ "ReadWriteOnce" ]
+      # Without a class this lands on the cluster default -- upcloud-block-storage-maxiops
+      # on eu-upcloud-1 -- and never on `standard`.
+      storageClassName: {{ .Values.storageClass }}
       resources:
         requests:
-          storage: 20Gi
+          storage: {{ .Values.dbStorage }}

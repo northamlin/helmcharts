@@ -1,22 +1,9 @@
-# Patterns to ignore when building packages.
-# This supports shell glob matching, relative path matching, and
-# negation (prefixed with !). Only one pattern per line.
-.DS_Store
-# Common VCS dirs
+# Packaging excludes. `helm package` otherwise sweeps up everything in the chart
+# directory -- which put kurrier/hrb-cluster-values.yaml, live credentials, inside a
+# tarball headed for a public repo.
+*-cluster-values.yaml
+.claude/
 .git/
 .gitignore
-.bzr/
-.bzrignore
-.hg/
-.hgignore
-.svn/
-# Common backup files
-*.swp
-*.bak
-*.tmp
-*~
-# Various IDEs
-.project
-.idea/
-*.tmproj
-.vscode/
+.DS_Store
+*.tgz

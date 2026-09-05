@@ -1,0 +1,540 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.name }}-{{ .Values.uuid }}-db-bootstrap
+data:
+  db-bootstrap.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo "🟡 Waiting for Postgres at $PGHOST..."
+    until pg_isready -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE" >/dev/null 2>&1; do
+      sleep 2
+    done
+    echo "✅ Postgres is ready."
+
+    echo "🧩 Setting up Supabase roles and schemas..."
+    # Create roles (idempotent via DO blocks) — must run as superuser
+    psql -h "$PGHOST" -U postgres -d "$PGDATABASE" -v ON_ERROR_STOP=1 <<'SQL'
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'anon') THEN
+        CREATE ROLE anon NOLOGIN NOINHERIT;
+      END IF;
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'authenticated') THEN
+        CREATE ROLE authenticated NOLOGIN NOINHERIT;
+      END IF;
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'service_role') THEN
+        CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS;
+      END IF;
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'authenticator') THEN
+        CREATE ROLE authenticator NOINHERIT LOGIN;
+      END IF;
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_auth_admin') THEN
+        CREATE ROLE supabase_auth_admin NOINHERIT LOGIN;
+      END IF;
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_storage_admin') THEN
+        CREATE ROLE supabase_storage_admin NOINHERIT LOGIN;
+      END IF;
+    END$$;
+
+    GRANT anon TO authenticator;
+    GRANT authenticated TO authenticator;
+    GRANT service_role TO authenticator;
+
+    CREATE SCHEMA IF NOT EXISTS extensions;
+    CREATE SCHEMA IF NOT EXISTS auth;
+    CREATE SCHEMA IF NOT EXISTS storage;
+
+    GRANT USAGE ON SCHEMA extensions TO anon, authenticated, service_role;
+    GRANT ALL ON SCHEMA auth TO supabase_auth_admin;
+    GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
+    GRANT ALL ON SCHEMA storage TO supabase_storage_admin;
+    GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;
+    GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+    GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+    GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+    ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+    ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+
+    CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
+    LANGUAGE sql STABLE AS $$
+      SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
+    $$;
+
+    CREATE OR REPLACE FUNCTION auth.role() RETURNS text
+    LANGUAGE sql STABLE AS $$
+      SELECT NULLIF(current_setting('request.jwt.claim.role', true), '')::text
+    $$;
+
+    CREATE OR REPLACE FUNCTION auth.email() RETURNS text
+    LANGUAGE sql STABLE AS $$
+      SELECT NULLIF(current_setting('request.jwt.claim.email', true), '')::text
+    $$;
+
+    SQL
+
+    # Set passwords, grants and role config — must run as superuser
+    psql -h "$PGHOST" -U postgres -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
+      -c "ALTER ROLE authenticator WITH LOGIN PASSWORD '$PGPASSWORD';" \
+      -c "ALTER ROLE supabase_auth_admin WITH LOGIN SUPERUSER PASSWORD '$PGPASSWORD';" \
+      -c "ALTER ROLE supabase_auth_admin SET search_path = 'auth';" \
+      -c "ALTER ROLE supabase_storage_admin WITH LOGIN PASSWORD '$PGPASSWORD';" \
+      -c "GRANT ALL PRIVILEGES ON DATABASE $PGDATABASE TO supabase_storage_admin;" \
+      -c "GRANT ALL PRIVILEGES ON DATABASE $PGDATABASE TO supabase_auth_admin;" \
+      -c "GRANT ALL PRIVILEGES ON DATABASE $PGDATABASE TO authenticator;"
+
+    echo "✅ Supabase roles and schemas ready."
+
+    # Wait for storage.buckets(public) to exist (up to ~4 minutes)
+    echo "🟡 Waiting for 'storage.buckets(public)' to exist..."
+    psql -h "$PGHOST" -U postgres -d "$PGDATABASE" -v ON_ERROR_STOP=1 <<'SQL'
+    DO $$
+    DECLARE
+      tries INT := 0;
+    BEGIN
+      WHILE NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'storage'
+          AND table_name = 'buckets'
+          AND column_name = 'public'
+      ) AND tries < 120 LOOP
+        PERFORM pg_sleep(2); -- wait 2s x 120 = ~4 minutes
+        tries := tries + 1;
+      END LOOP;
+    END
+    $$;
+    SQL
+    echo "✅ storage.buckets(public) is ready."
+
+    echo "🧩 Ensuring attachments bucket and storage policies..."
+    psql -h "$PGHOST" -U postgres -d "$PGDATABASE" -v ON_ERROR_STOP=1 <<'SQL'
+    INSERT INTO storage.buckets (id, name, public)
+    VALUES ('attachments', 'attachments', false)
+    ON CONFLICT (id) DO NOTHING;
+
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'private-own-crud'
+      ) THEN
+        CREATE POLICY "private-own-crud"
+        ON storage.objects
+        FOR ALL TO authenticated
+        USING (
+          bucket_id = 'attachments'
+          AND name LIKE 'private/' || auth.uid()::text || '/%'
+        )
+        WITH CHECK (
+          bucket_id = 'attachments'
+          AND name LIKE 'private/' || auth.uid()::text || '/%'
+        );
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'eml-own-crud'
+      ) THEN
+        CREATE POLICY "eml-own-crud"
+        ON storage.objects
+        FOR ALL TO authenticated
+        USING (
+          bucket_id = 'attachments'
+          AND name LIKE 'eml/' || auth.uid()::text || '/%'
+        )
+        WITH CHECK (
+          bucket_id = 'attachments'
+          AND name LIKE 'eml/' || auth.uid()::text || '/%'
+        );
+      END IF;
+    END
+    $$;
+    SQL
+    echo "✅ Storage bucket and policies ready."
+
+    # Wait for GoTrue to create the real auth.users with encrypted_password column
+    echo "🟡 Waiting for GoTrue auth schema (auth.users.encrypted_password)..."
+    psql -h "$PGHOST" -U postgres -d "$PGDATABASE" -v ON_ERROR_STOP=1 <<'SQL'
+    DO $$
+    DECLARE
+      tries INT := 0;
+    BEGIN
+      WHILE NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'auth'
+          AND table_name = 'users'
+          AND column_name = 'encrypted_password'
+      ) AND tries < 150 LOOP
+        PERFORM pg_sleep(2); -- wait 2s x 150 = ~5 minutes
+        tries := tries + 1;
+      END LOOP;
+      IF tries >= 150 THEN
+        RAISE EXCEPTION 'Timed out waiting for GoTrue to create auth.users schema';
+      END IF;
+    END
+    $$;
+    SQL
+    echo "✅ GoTrue auth schema is ready."
+
+    echo "🧩 Ensuring migrations table exists..."
+    psql -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 <<'SQL'
+    CREATE TABLE IF NOT EXISTS public.migrations (
+      version text PRIMARY KEY,
+      applied_at timestamptz DEFAULT now()
+    );
+    SQL
+
+    echo "🚀 Applying new migrations..."
+    for file in $(ls /scripts/migrations/*.sql | sort); do
+      base=$(basename "$file")
+      version="${base%.sql}"
+      exists=$(psql -tA -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE" \
+        -c "SELECT 1 FROM public.migrations WHERE version = '$version' LIMIT 1")
+
+      if [ "$exists" = "1" ]; then
+        echo "⏭️  Skipping $base (already applied)"
+      else
+        echo "🟢 Running $base ..."
+        psql -h "$PGHOST" -U postgres -d "$PGDATABASE" -v ON_ERROR_STOP=1 -f "$file"
+        psql -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE" \
+          -c "INSERT INTO public.migrations(version) VALUES ('$version');"
+      fi
+    done
+
+    echo "✅ All migrations done."
+
+    echo "🧩 Ensuring admin user exists..."
+    psql -h "$PGHOST" -U postgres -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
+      -c "CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;" \
+      -c "DO \$\$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = '$ADMIN_EMAIL') THEN
+              INSERT INTO auth.users (
+                id, aud, role, email, encrypted_password,
+                email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+                is_super_admin, created_at, updated_at, is_sso_user, is_anonymous
+              ) VALUES (
+                gen_random_uuid(), 'authenticated', 'authenticated',
+                '$ADMIN_EMAIL',
+                extensions.crypt('$ADMIN_PASSWORD', extensions.gen_salt('bf')),
+                now(),
+                '{\"provider\": \"email\", \"providers\": [\"email\"]}',
+                '{}',
+                false, now(), now(), false, false
+              );
+            END IF;
+          END
+          \$\$;"
+    echo "✅ Admin user ready."
+
+    echo "✅ Bootstrap complete."
+
+  initialize-schema.sql: |
+    DO $$
+    BEGIN
+      -- Create enum types idempotently (ignore if already exist from partial run)
+      BEGIN EXECUTE 'CREATE TYPE public.identity_kind AS ENUM(''domain'', ''email'')'; EXCEPTION WHEN duplicate_object THEN NULL; END;
+      BEGIN EXECUTE 'CREATE TYPE public.identity_status AS ENUM(''unverified'', ''pending'', ''verified'', ''failed'')'; EXCEPTION WHEN duplicate_object THEN NULL; END;
+      BEGIN EXECUTE 'CREATE TYPE public.mailbox_kind AS ENUM(''inbox'', ''sent'', ''drafts'', ''archive'', ''spam'', ''trash'', ''outbox'', ''custom'')'; EXCEPTION WHEN duplicate_object THEN NULL; END;
+      BEGIN EXECUTE 'CREATE TYPE public.message_priority AS ENUM(''low'', ''medium'', ''high'')'; EXCEPTION WHEN duplicate_object THEN NULL; END;
+      BEGIN EXECUTE 'CREATE TYPE public.message_state AS ENUM(''normal'', ''bounced'', ''queued'', ''failed'')'; EXCEPTION WHEN duplicate_object THEN NULL; END;
+      BEGIN EXECUTE 'CREATE TYPE public.provider_kind AS ENUM(''smtp'', ''ses'', ''mailgun'', ''postmark'', ''sendgrid'')'; EXCEPTION WHEN duplicate_object THEN NULL; END;
+      BEGIN EXECUTE 'CREATE TYPE public.mailbox_sync_phase AS ENUM(''BOOTSTRAP'', ''BACKFILL'', ''IDLE'')'; EXCEPTION WHEN duplicate_object THEN NULL; END;
+
+      -- Skip tables/FKs/indexes/policies if identities already exists
+      IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'identities') THEN
+        RAISE NOTICE 'Application schema already exists, skipping.';
+        RETURN;
+      END IF;
+
+      -- Tables
+      EXECUTE $t$CREATE TABLE identities (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        owner_id uuid DEFAULT auth.uid() NOT NULL,
+        kind identity_kind NOT NULL,
+        public_id text NOT NULL,
+        value text NOT NULL,
+        incoming_domain boolean DEFAULT false,
+        domain_identity_id uuid DEFAULT null,
+        dns_records jsonb DEFAULT 'null'::jsonb,
+        meta jsonb DEFAULT 'null'::jsonb,
+        provider_id uuid,
+        smtp_account_id uuid,
+        status identity_status DEFAULT 'unverified' NOT NULL,
+        created_at timestamptz DEFAULT now() NOT NULL,
+        updated_at timestamptz DEFAULT now() NOT NULL
+      )$t$;
+      EXECUTE 'ALTER TABLE identities ENABLE ROW LEVEL SECURITY';
+
+      EXECUTE $t$CREATE TABLE mailbox_sync (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        identity_id uuid NOT NULL,
+        mailbox_id uuid NOT NULL,
+        uid_validity bigint NOT NULL,
+        last_seen_uid bigint DEFAULT 0 NOT NULL,
+        backfill_cursor_uid bigint DEFAULT 0 NOT NULL,
+        highest_modseq numeric(20,0),
+        phase mailbox_sync_phase DEFAULT 'BOOTSTRAP' NOT NULL,
+        synced_at timestamptz,
+        error text,
+        created_at timestamptz DEFAULT now() NOT NULL,
+        updated_at timestamptz DEFAULT now()
+      )$t$;
+
+      EXECUTE $t$CREATE TABLE mailbox_threads (
+        thread_id uuid NOT NULL,
+        mailbox_id uuid NOT NULL,
+        owner_id uuid DEFAULT auth.uid() NOT NULL,
+        identity_id uuid NOT NULL,
+        identity_public_id text NOT NULL,
+        mailbox_slug text,
+        subject text,
+        preview_text text,
+        last_activity_at timestamptz NOT NULL,
+        first_message_at timestamptz,
+        message_count integer DEFAULT 0 NOT NULL,
+        unread_count integer DEFAULT 0 NOT NULL,
+        has_attachments boolean DEFAULT false NOT NULL,
+        starred boolean DEFAULT false NOT NULL,
+        participants jsonb,
+        created_at timestamptz DEFAULT now() NOT NULL,
+        updated_at timestamptz DEFAULT now() NOT NULL,
+        CONSTRAINT pk_mailbox_threads PRIMARY KEY(thread_id, mailbox_id)
+      )$t$;
+      EXECUTE 'ALTER TABLE mailbox_threads ENABLE ROW LEVEL SECURITY';
+
+      EXECUTE $t$CREATE TABLE mailboxes (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        owner_id uuid DEFAULT auth.uid() NOT NULL,
+        identity_id uuid NOT NULL,
+        parent_id uuid DEFAULT null,
+        public_id text NOT NULL,
+        kind mailbox_kind DEFAULT 'inbox' NOT NULL,
+        name text,
+        slug text,
+        is_default boolean DEFAULT false NOT NULL,
+        meta jsonb DEFAULT 'null'::jsonb,
+        created_at timestamptz DEFAULT now() NOT NULL,
+        updated_at timestamptz DEFAULT now() NOT NULL
+      )$t$;
+      EXECUTE 'ALTER TABLE mailboxes ENABLE ROW LEVEL SECURITY';
+
+      EXECUTE $t$CREATE TABLE message_attachments (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        owner_id uuid DEFAULT auth.uid() NOT NULL,
+        message_id uuid NOT NULL,
+        bucket_id text DEFAULT 'attachments' NOT NULL,
+        path text NOT NULL,
+        filename_original text,
+        content_type text,
+        size_bytes integer,
+        cid text,
+        is_inline boolean DEFAULT false NOT NULL,
+        checksum text,
+        created_at timestamptz DEFAULT now() NOT NULL,
+        updated_at timestamptz DEFAULT now() NOT NULL
+      )$t$;
+      EXECUTE 'ALTER TABLE message_attachments ENABLE ROW LEVEL SECURITY';
+
+      EXECUTE $t$CREATE TABLE messages (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        owner_id uuid DEFAULT auth.uid() NOT NULL,
+        mailbox_id uuid NOT NULL,
+        public_id text NOT NULL,
+        message_id text NOT NULL,
+        in_reply_to text,
+        "references" text[],
+        thread_id uuid NOT NULL,
+        reply_to jsonb DEFAULT '[]'::jsonb,
+        delivered_to text,
+        priority message_priority DEFAULT null,
+        html text,
+        subject text,
+        snippet text,
+        text text,
+        text_as_html text,
+        from_addr jsonb DEFAULT null,
+        to_addr jsonb DEFAULT null,
+        cc jsonb DEFAULT null,
+        bcc jsonb DEFAULT null,
+        date timestamptz,
+        size_bytes integer,
+        seen boolean DEFAULT false NOT NULL,
+        answered boolean DEFAULT false NOT NULL,
+        flagged boolean DEFAULT false NOT NULL,
+        draft boolean DEFAULT false NOT NULL,
+        has_attachments boolean DEFAULT false NOT NULL,
+        state message_state DEFAULT 'normal' NOT NULL,
+        headers_json jsonb DEFAULT 'null'::jsonb,
+        raw_storage_key text,
+        meta jsonb DEFAULT 'null'::jsonb,
+        created_at timestamptz DEFAULT now() NOT NULL,
+        updated_at timestamptz DEFAULT now() NOT NULL
+      )$t$;
+      EXECUTE 'ALTER TABLE messages ENABLE ROW LEVEL SECURITY';
+
+      EXECUTE $t$CREATE TABLE provider_secrets (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        provider_id uuid NOT NULL,
+        secret_id uuid NOT NULL,
+        created_at timestamptz DEFAULT now() NOT NULL,
+        updated_at timestamptz DEFAULT now() NOT NULL
+      )$t$;
+      EXECUTE 'ALTER TABLE provider_secrets ENABLE ROW LEVEL SECURITY';
+
+      EXECUTE $t$CREATE TABLE providers (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        owner_id uuid DEFAULT auth.uid() NOT NULL,
+        type provider_kind NOT NULL,
+        meta jsonb DEFAULT 'null'::jsonb,
+        created_at timestamptz DEFAULT now() NOT NULL,
+        updated_at timestamptz DEFAULT now() NOT NULL
+      )$t$;
+      EXECUTE 'ALTER TABLE providers ENABLE ROW LEVEL SECURITY';
+
+      EXECUTE $t$CREATE TABLE secrets_meta (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        owner_id uuid DEFAULT auth.uid() NOT NULL,
+        name text NOT NULL,
+        description text,
+        vault_secret uuid NOT NULL
+      )$t$;
+      EXECUTE 'ALTER TABLE secrets_meta ENABLE ROW LEVEL SECURITY';
+
+      EXECUTE $t$CREATE TABLE smtp_account_secrets (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        account_id uuid NOT NULL,
+        secret_id uuid NOT NULL,
+        created_at timestamptz DEFAULT now() NOT NULL,
+        updated_at timestamptz DEFAULT now() NOT NULL
+      )$t$;
+      EXECUTE 'ALTER TABLE smtp_account_secrets ENABLE ROW LEVEL SECURITY';
+
+      EXECUTE $t$CREATE TABLE smtp_accounts (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        owner_id uuid DEFAULT auth.uid() NOT NULL,
+        created_at timestamptz DEFAULT now() NOT NULL,
+        updated_at timestamptz DEFAULT now() NOT NULL
+      )$t$;
+      EXECUTE 'ALTER TABLE smtp_accounts ENABLE ROW LEVEL SECURITY';
+
+      EXECUTE $t$CREATE TABLE threads (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        owner_id uuid DEFAULT auth.uid() NOT NULL,
+        last_message_date timestamptz,
+        last_message_id uuid DEFAULT null,
+        message_count integer DEFAULT 0 NOT NULL,
+        created_at timestamptz DEFAULT now() NOT NULL,
+        updated_at timestamptz DEFAULT now() NOT NULL
+      )$t$;
+      EXECUTE 'ALTER TABLE threads ENABLE ROW LEVEL SECURITY';
+
+      -- Foreign keys
+      EXECUTE 'ALTER TABLE identities ADD CONSTRAINT identities_owner_id_users_id_fk FOREIGN KEY (owner_id) REFERENCES auth.users(id)';
+      EXECUTE 'ALTER TABLE identities ADD CONSTRAINT identities_domain_identity_id_identities_id_fk FOREIGN KEY (domain_identity_id) REFERENCES identities(id) ON DELETE SET NULL';
+      EXECUTE 'ALTER TABLE identities ADD CONSTRAINT identities_provider_id_providers_id_fk FOREIGN KEY (provider_id) REFERENCES providers(id)';
+      EXECUTE 'ALTER TABLE identities ADD CONSTRAINT identities_smtp_account_id_smtp_accounts_id_fk FOREIGN KEY (smtp_account_id) REFERENCES smtp_accounts(id)';
+      EXECUTE 'ALTER TABLE mailbox_sync ADD CONSTRAINT mailbox_sync_identity_id_identities_id_fk FOREIGN KEY (identity_id) REFERENCES identities(id) ON DELETE CASCADE';
+      EXECUTE 'ALTER TABLE mailbox_sync ADD CONSTRAINT mailbox_sync_mailbox_id_mailboxes_id_fk FOREIGN KEY (mailbox_id) REFERENCES mailboxes(id) ON DELETE CASCADE';
+      EXECUTE 'ALTER TABLE mailbox_threads ADD CONSTRAINT mailbox_threads_thread_id_threads_id_fk FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE';
+      EXECUTE 'ALTER TABLE mailbox_threads ADD CONSTRAINT mailbox_threads_mailbox_id_mailboxes_id_fk FOREIGN KEY (mailbox_id) REFERENCES mailboxes(id) ON DELETE CASCADE';
+      EXECUTE 'ALTER TABLE mailbox_threads ADD CONSTRAINT mailbox_threads_owner_id_users_id_fk FOREIGN KEY (owner_id) REFERENCES auth.users(id)';
+      EXECUTE 'ALTER TABLE mailbox_threads ADD CONSTRAINT mailbox_threads_identity_id_identities_id_fk FOREIGN KEY (identity_id) REFERENCES identities(id) ON DELETE CASCADE';
+      EXECUTE 'ALTER TABLE mailboxes ADD CONSTRAINT mailboxes_owner_id_users_id_fk FOREIGN KEY (owner_id) REFERENCES auth.users(id)';
+      EXECUTE 'ALTER TABLE mailboxes ADD CONSTRAINT mailboxes_identity_id_identities_id_fk FOREIGN KEY (identity_id) REFERENCES identities(id) ON DELETE CASCADE';
+      EXECUTE 'ALTER TABLE message_attachments ADD CONSTRAINT message_attachments_owner_id_users_id_fk FOREIGN KEY (owner_id) REFERENCES auth.users(id)';
+      EXECUTE 'ALTER TABLE message_attachments ADD CONSTRAINT message_attachments_message_id_messages_id_fk FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE';
+      EXECUTE 'ALTER TABLE messages ADD CONSTRAINT messages_owner_id_users_id_fk FOREIGN KEY (owner_id) REFERENCES auth.users(id)';
+      EXECUTE 'ALTER TABLE messages ADD CONSTRAINT messages_mailbox_id_mailboxes_id_fk FOREIGN KEY (mailbox_id) REFERENCES mailboxes(id) ON DELETE CASCADE';
+      EXECUTE 'ALTER TABLE messages ADD CONSTRAINT messages_thread_id_threads_id_fk FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE';
+      EXECUTE 'ALTER TABLE provider_secrets ADD CONSTRAINT provider_secrets_provider_id_providers_id_fk FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE';
+      EXECUTE 'ALTER TABLE provider_secrets ADD CONSTRAINT provider_secrets_secret_id_secrets_meta_id_fk FOREIGN KEY (secret_id) REFERENCES secrets_meta(id) ON DELETE CASCADE';
+      EXECUTE 'ALTER TABLE providers ADD CONSTRAINT providers_owner_id_users_id_fk FOREIGN KEY (owner_id) REFERENCES auth.users(id)';
+      EXECUTE 'ALTER TABLE secrets_meta ADD CONSTRAINT secrets_meta_owner_id_users_id_fk FOREIGN KEY (owner_id) REFERENCES auth.users(id)';
+      EXECUTE 'ALTER TABLE smtp_account_secrets ADD CONSTRAINT smtp_account_secrets_account_id_smtp_accounts_id_fk FOREIGN KEY (account_id) REFERENCES smtp_accounts(id) ON DELETE CASCADE';
+      EXECUTE 'ALTER TABLE smtp_account_secrets ADD CONSTRAINT smtp_account_secrets_secret_id_secrets_meta_id_fk FOREIGN KEY (secret_id) REFERENCES secrets_meta(id) ON DELETE CASCADE';
+      EXECUTE 'ALTER TABLE smtp_accounts ADD CONSTRAINT smtp_accounts_owner_id_users_id_fk FOREIGN KEY (owner_id) REFERENCES auth.users(id)';
+      EXECUTE 'ALTER TABLE threads ADD CONSTRAINT threads_owner_id_users_id_fk FOREIGN KEY (owner_id) REFERENCES auth.users(id)';
+      EXECUTE 'ALTER TABLE threads ADD CONSTRAINT threads_last_message_id_messages_id_fk FOREIGN KEY (last_message_id) REFERENCES messages(id) ON DELETE SET NULL';
+
+      -- Indexes
+      EXECUTE 'CREATE UNIQUE INDEX uniq_identity_per_user ON identities USING btree (owner_id, kind, value)';
+      EXECUTE 'CREATE UNIQUE INDEX uniq_identity_public_id ON identities USING btree (public_id)';
+      EXECUTE 'CREATE UNIQUE INDEX ux_mailbox_sync_mailbox ON mailbox_sync USING btree (mailbox_id)';
+      EXECUTE 'CREATE INDEX ix_mailbox_sync_identity ON mailbox_sync USING btree (identity_id)';
+      EXECUTE 'CREATE INDEX ix_mailbox_sync_phase ON mailbox_sync USING btree (phase)';
+      EXECUTE 'CREATE INDEX ix_mbth_mailbox_activity ON mailbox_threads USING btree (mailbox_id, last_activity_at, thread_id)';
+      EXECUTE 'CREATE INDEX ix_mbth_identity_slug ON mailbox_threads USING btree (identity_id, mailbox_slug)';
+      EXECUTE 'CREATE INDEX ix_mbth_identity_public_id ON mailbox_threads USING btree (identity_public_id)';
+      EXECUTE 'CREATE INDEX ix_mbth_mailbox_unread ON mailbox_threads USING btree (mailbox_id, unread_count)';
+      EXECUTE 'CREATE INDEX ix_mbth_mailbox_starred ON mailbox_threads USING btree (mailbox_id, starred)';
+      EXECUTE 'CREATE UNIQUE INDEX ux_mbth_thread_mailbox ON mailbox_threads USING btree (thread_id, mailbox_id)';
+      EXECUTE 'CREATE UNIQUE INDEX uniq_mailbox_public_id ON mailboxes USING btree (public_id)';
+      EXECUTE $i$CREATE UNIQUE INDEX uniq_default_mailbox_per_kind ON mailboxes USING btree (identity_id, kind) WHERE is_default IS TRUE$i$;
+      EXECUTE $i$CREATE UNIQUE INDEX uniq_mailbox_slug_per_identity ON mailboxes USING btree (identity_id, slug) WHERE slug IS NOT NULL$i$;
+      EXECUTE 'CREATE INDEX idx_msg_attachments_message ON message_attachments USING btree (message_id)';
+      EXECUTE 'CREATE UNIQUE INDEX uniq_bucket_path ON message_attachments USING btree (bucket_id, path)';
+      EXECUTE 'CREATE INDEX idx_msg_attachments_cid ON message_attachments USING btree (cid)';
+      EXECUTE 'CREATE UNIQUE INDEX uniq_message_public_id ON messages USING btree (public_id)';
+      EXECUTE 'CREATE INDEX idx_messages_priority ON messages USING btree (priority)';
+      EXECUTE 'CREATE UNIQUE INDEX uniq_mailbox_message_id ON messages USING btree (mailbox_id, message_id)';
+      EXECUTE 'CREATE INDEX idx_messages_in_reply_to ON messages USING btree (in_reply_to)';
+      EXECUTE 'CREATE INDEX ix_messages_thread_flagged ON messages USING btree (thread_id, flagged)';
+      EXECUTE 'CREATE INDEX idx_messages_mailbox_date ON messages USING btree (mailbox_id, date)';
+      EXECUTE 'CREATE INDEX idx_messages_mailbox_seen_date ON messages USING btree (mailbox_id, seen, date)';
+      EXECUTE 'CREATE UNIQUE INDEX uniq_provider_per_user ON providers USING btree (owner_id, type)';
+      EXECUTE 'CREATE INDEX idx_threads_owner_lastdate ON threads USING btree (owner_id, last_message_date, id)';
+      EXECUTE 'CREATE INDEX idx_threads_owner_id ON threads USING btree (owner_id, id)';
+
+      -- RLS Policies
+      EXECUTE $p$CREATE POLICY identities_select_own ON identities AS PERMISSIVE FOR SELECT TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY identities_insert_own ON identities AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY identities_update_own ON identities AS PERMISSIVE FOR UPDATE TO authenticated USING (owner_id = (select auth.uid())) WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY identities_delete_own ON identities AS PERMISSIVE FOR DELETE TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY mbth_select_own ON mailbox_threads AS PERMISSIVE FOR SELECT TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY mbth_insert_own ON mailbox_threads AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY mbth_update_own ON mailbox_threads AS PERMISSIVE FOR UPDATE TO authenticated USING (owner_id = (select auth.uid())) WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY mbth_delete_own ON mailbox_threads AS PERMISSIVE FOR DELETE TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY mailboxes_select_own ON mailboxes AS PERMISSIVE FOR SELECT TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY mailboxes_insert_own ON mailboxes AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY mailboxes_update_own ON mailboxes AS PERMISSIVE FOR UPDATE TO authenticated USING (owner_id = (select auth.uid())) WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY mailboxes_delete_own ON mailboxes AS PERMISSIVE FOR DELETE TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY message_attachments_select_own ON message_attachments AS PERMISSIVE FOR SELECT TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY message_attachments_insert_own ON message_attachments AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY message_attachments_update_own ON message_attachments AS PERMISSIVE FOR UPDATE TO authenticated USING (owner_id = (select auth.uid())) WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY message_attachments_delete_own ON message_attachments AS PERMISSIVE FOR DELETE TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY messages_select_own ON messages AS PERMISSIVE FOR SELECT TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY messages_insert_own ON messages AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY messages_update_own ON messages AS PERMISSIVE FOR UPDATE TO authenticated USING (owner_id = (select auth.uid())) WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY messages_delete_own ON messages AS PERMISSIVE FOR DELETE TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY provsec_select_own ON provider_secrets AS PERMISSIVE FOR SELECT TO authenticated USING (exists (select 1 from providers p where p.id = provider_secrets.provider_id and p.owner_id = (select auth.uid())))$p$;
+      EXECUTE $p$CREATE POLICY provsec_insert_own ON provider_secrets AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK (exists (select 1 from providers p where p.id = provider_secrets.provider_id and p.owner_id = (select auth.uid())) and exists (select 1 from secrets_meta s where s.id = provider_secrets.secret_id and s.owner_id = (select auth.uid())))$p$;
+      EXECUTE $p$CREATE POLICY provsec_update_own ON provider_secrets AS PERMISSIVE FOR UPDATE TO authenticated USING (exists (select 1 from providers p where p.id = provider_secrets.provider_id and p.owner_id = (select auth.uid()))) WITH CHECK (exists (select 1 from providers p where p.id = provider_secrets.provider_id and p.owner_id = (select auth.uid())) and exists (select 1 from secrets_meta s where s.id = provider_secrets.secret_id and s.owner_id = (select auth.uid())))$p$;
+      EXECUTE $p$CREATE POLICY provsec_delete_own ON provider_secrets AS PERMISSIVE FOR DELETE TO authenticated USING (exists (select 1 from providers p where p.id = provider_secrets.provider_id and p.owner_id = (select auth.uid())))$p$;
+      EXECUTE $p$CREATE POLICY providers_select_own ON providers AS PERMISSIVE FOR SELECT TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY providers_insert_own ON providers AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY providers_update_own ON providers AS PERMISSIVE FOR UPDATE TO authenticated USING (owner_id = (select auth.uid())) WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY providers_delete_own ON providers AS PERMISSIVE FOR DELETE TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY select_own ON secrets_meta AS PERMISSIVE FOR SELECT TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY insert_own ON secrets_meta AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY update_own ON secrets_meta AS PERMISSIVE FOR UPDATE TO authenticated USING (owner_id = (select auth.uid())) WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY delete_own ON secrets_meta AS PERMISSIVE FOR DELETE TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY smtpsec_select_own ON smtp_account_secrets AS PERMISSIVE FOR SELECT TO authenticated USING (exists (select 1 from smtp_accounts a where a.id = smtp_account_secrets.account_id and a.owner_id = (select auth.uid())))$p$;
+      EXECUTE $p$CREATE POLICY smtpsec_insert_own ON smtp_account_secrets AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK (exists (select 1 from smtp_accounts a where a.id = smtp_account_secrets.account_id and a.owner_id = (select auth.uid())) and exists (select 1 from secrets_meta s where s.id = smtp_account_secrets.secret_id and s.owner_id = (select auth.uid())))$p$;
+      EXECUTE $p$CREATE POLICY smtpsec_update_own ON smtp_account_secrets AS PERMISSIVE FOR UPDATE TO authenticated USING (exists (select 1 from smtp_accounts a where a.id = smtp_account_secrets.account_id and a.owner_id = (select auth.uid()))) WITH CHECK (exists (select 1 from smtp_accounts a where a.id = smtp_account_secrets.account_id and a.owner_id = (select auth.uid())) and exists (select 1 from secrets_meta s where s.id = smtp_account_secrets.secret_id and s.owner_id = (select auth.uid())))$p$;
+      EXECUTE $p$CREATE POLICY smtpsec_delete_own ON smtp_account_secrets AS PERMISSIVE FOR DELETE TO authenticated USING (exists (select 1 from smtp_accounts a where a.id = smtp_account_secrets.account_id and a.owner_id = (select auth.uid())))$p$;
+      EXECUTE $p$CREATE POLICY smtp_select_own ON smtp_accounts AS PERMISSIVE FOR SELECT TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY smtp_insert_own ON smtp_accounts AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY smtp_update_own ON smtp_accounts AS PERMISSIVE FOR UPDATE TO authenticated USING (owner_id = (select auth.uid())) WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY smtp_delete_own ON smtp_accounts AS PERMISSIVE FOR DELETE TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY threads_select_own ON threads AS PERMISSIVE FOR SELECT TO authenticated USING (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY threads_insert_own ON threads AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY threads_update_own ON threads AS PERMISSIVE FOR UPDATE TO authenticated USING (owner_id = (select auth.uid())) WITH CHECK (owner_id = (select auth.uid()))$p$;
+      EXECUTE $p$CREATE POLICY threads_delete_own ON threads AS PERMISSIVE FOR DELETE TO authenticated USING (owner_id = (select auth.uid()))$p$;
+
+      RAISE NOTICE 'Application schema created successfully.';
+    END
+    $$;
