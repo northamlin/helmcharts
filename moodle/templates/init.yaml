@@ -8,6 +8,13 @@ spec:
       containers:
       - name: db-init
         image: mattiashem/init
+        resources:
+          requests:
+            cpu: {{ .Values.sidecarCpu }}
+            memory: {{ .Values.sidecarMemory }}
+          limits:
+            cpu: {{ .Values.sidecarCpuLimit }}
+            memory: {{ .Values.sidecarMemoryLimit }}
         env:
           - name: DEST_DBPASS
             valueFrom:

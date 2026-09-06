@@ -21,4 +21,8 @@ spec:
               name: redis
           resources:
             requests:
-              cpu: 50m
+              cpu: {{ .Values.appCpu }}
+              memory: {{ .Values.appMemory }}
+            limits:
+              cpu: {{ .Values.appCpuLimit }}
+              memory: {{ .Values.appMemoryLimit }}

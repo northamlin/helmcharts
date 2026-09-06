@@ -42,7 +42,11 @@ spec:
               name: sql
           resources:
             requests:
-              cpu: 100m
+              cpu: {{ .Values.dbCpu }}
+              memory: {{ .Values.dbMemory }}
+            limits:
+              cpu: {{ .Values.dbCpuLimit }}
+              memory: {{ .Values.dbMemoryLimit }}
           volumeMounts:
             - name: mysql-persistent-storage
               mountPath: /var/lib/mysql

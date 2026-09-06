@@ -30,6 +30,13 @@ spec:
           - containerPort: 9113
             name: metrics
             protocol: TCP
+          resources:
+            requests:
+              cpu: {{ .Values.sidecarCpu }}
+              memory: {{ .Values.sidecarMemory }}
+            limits:
+              cpu: {{ .Values.sidecarCpuLimit }}
+              memory: {{ .Values.sidecarMemoryLimit }}
         - name: {{ .Values.name }}
           image: "{{ .Values.image }}"
           env:
@@ -55,22 +62,22 @@ spec:
           resources:          
           {{ if eq .Values.resource "low" }}
             requests:
-              memory: "64Mi"
-              cpu: "250m"
-            limits:
               memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "512Mi"
               cpu: "500m"
           {{ else if eq .Values.resource "medium" }}
             requests:
               memory: "256Mi"
-              cpu: "500m"
+              cpu: "100m"
             limits:
-              memory: "512Mi"
+              memory: "1024Mi"
               cpu: "1000m"
           {{ else if eq .Values.resource "high" }}
             requests:
-              memory: "2048Mi"
-              cpu: "1000m"
+              memory: "512Mi"
+              cpu: "250m"
             limits:
               memory: "4096Mi"
               cpu: "2000m"

@@ -45,7 +45,11 @@ spec:
               name: wiki
           resources:
             requests:
-              cpu: 100m
+              cpu: {{ .Values.appCpu }}
+              memory: {{ .Values.appMemory }}
+            limits:
+              cpu: {{ .Values.appCpuLimit }}
+              memory: {{ .Values.appMemoryLimit }}
           livenessProbe:
            httpGet:
              path: /

@@ -51,3 +51,11 @@ dbCpu: 100m
 dbMemory: 256Mi
 dbCpuLimit: 500m
 dbMemoryLimit: 768Mi
+
+# Sidecars and one-shot seed Jobs: the metrics exporter, the uggla sidecar, the SQL
+# seeders. Tiny, but they still need a request the scheduler can see and a limit that
+# is not left to chance.
+sidecarCpu: 10m
+sidecarMemory: 32Mi
+sidecarCpuLimit: 100m
+sidecarMemoryLimit: 128Mi

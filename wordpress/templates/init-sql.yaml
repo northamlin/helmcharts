@@ -8,6 +8,13 @@ spec:
       containers:
       - name: init-sql
         image: elino/sql-client
+        resources:
+          requests:
+            cpu: {{ .Values.sidecarCpu }}
+            memory: {{ .Values.sidecarMemory }}
+          limits:
+            cpu: {{ .Values.sidecarCpuLimit }}
+            memory: {{ .Values.sidecarMemoryLimit }}
         env:
           - name: MYSQL_HOST
             value: {{ .Values.name }}-{{ .Values.uuid }}-mysql-master

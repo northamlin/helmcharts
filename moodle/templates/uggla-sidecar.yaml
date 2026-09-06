@@ -20,6 +20,13 @@ spec:
         - image: mattiashem/uggla-sidecar
           imagePullPolicy: Always
           name: sidecar
+          resources:
+            requests:
+              cpu: {{ .Values.sidecarCpu }}
+              memory: {{ .Values.sidecarMemory }}
+            limits:
+              cpu: {{ .Values.sidecarCpuLimit }}
+              memory: {{ .Values.sidecarMemoryLimit }}
           env:
             - name:  SCHOOL_URL
               value: "{{ .Values.proto }}://{{ .Values.url }}/webservice/rest/server.php"

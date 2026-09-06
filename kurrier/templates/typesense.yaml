@@ -29,8 +29,11 @@ spec:
               name: http
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
+              cpu: {{ .Values.appCpu }}
+              memory: {{ .Values.appMemory }}
+            limits:
+              cpu: {{ .Values.appCpuLimit }}
+              memory: {{ .Values.appMemoryLimit }}
           volumeMounts:
             - name: typesense-data
               mountPath: /data

@@ -8,3 +8,14 @@ image:
   repository: gcr.io/cloudsql-docker/gce-proxy
   tag: 1.14
 
+
+# Supporting containers (redis, typesense, the mail workers, the in-chart app pods --
+# anything without a low/medium/high tier). Requests are what the scheduler reserves,
+# so keep them small; limits are the ceiling and exist so a container cannot be
+# OOM-killed at a number nobody chose. These blocks previously declared a CPU request
+# and nothing else, which left them BestEffort on memory -- first to be evicted, and
+# free to balloon until they took the node with them.
+appCpu: 50m
+appMemory: 128Mi
+appCpuLimit: 500m
+appMemoryLimit: 512Mi

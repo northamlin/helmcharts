@@ -28,7 +28,11 @@ spec:
               name: rabbit
           resources:
             requests:
-              cpu: 100m
+              cpu: {{ .Values.appCpu }}
+              memory: {{ .Values.appMemory }}
+            limits:
+              cpu: {{ .Values.appCpuLimit }}
+              memory: {{ .Values.appMemoryLimit }}
 ---
 apiVersion: v1
 kind: Service

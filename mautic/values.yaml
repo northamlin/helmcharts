@@ -38,3 +38,9 @@ hosting:
 # names nothing lands somewhere else.
 storageClass: standard
 dbStorage: 20Gi
+
+# The chart's own MySQL. Same split: small reservation, generous ceiling.
+dbCpu: 50m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi

@@ -57,8 +57,11 @@ spec:
               name: https
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: {{ .Values.appCpu }}
+              memory: {{ .Values.appMemory }}
+            limits:
+              cpu: {{ .Values.appCpuLimit }}
+              memory: {{ .Values.appMemoryLimit }}
           volumeMounts:
             - name: kong-config
               mountPath: /home/kong/
@@ -180,8 +183,11 @@ spec:
               name: http
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: {{ .Values.appCpu }}
+              memory: {{ .Values.appMemory }}
+            limits:
+              cpu: {{ .Values.appCpuLimit }}
+              memory: {{ .Values.appMemoryLimit }}
 ---
 apiVersion: v1
 kind: Service
@@ -248,8 +254,11 @@ spec:
               name: http
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: {{ .Values.appCpu }}
+              memory: {{ .Values.appMemory }}
+            limits:
+              cpu: {{ .Values.appCpuLimit }}
+              memory: {{ .Values.appMemoryLimit }}
 ---
 apiVersion: v1
 kind: Service
@@ -329,8 +338,11 @@ spec:
               name: http
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: {{ .Values.appCpu }}
+              memory: {{ .Values.appMemory }}
+            limits:
+              cpu: {{ .Values.appCpuLimit }}
+              memory: {{ .Values.appMemoryLimit }}
           volumeMounts:
             - name: storage-data
               mountPath: /var/lib/storage

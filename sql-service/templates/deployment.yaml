@@ -29,7 +29,11 @@ spec:
           name: cloudsql-proxy
           resources:
             requests:
-              cpu: 50m
+              cpu: {{ .Values.appCpu }}
+              memory: {{ .Values.appMemory }}
+            limits:
+              cpu: {{ .Values.appCpuLimit }}
+              memory: {{ .Values.appMemoryLimit }}
 
           command: ["/cloud_sql_proxy", "--dir=/cloudsql",
                     "-instances={{ .Values.cloudsqlhost}}=tcp:0.0.0.0:3306",

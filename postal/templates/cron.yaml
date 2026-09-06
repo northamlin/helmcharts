@@ -22,7 +22,11 @@ spec:
               name: stmp
           resources:
             requests:
-              cpu: 100m
+              cpu: {{ .Values.appCpu }}
+              memory: {{ .Values.appMemory }}
+            limits:
+              cpu: {{ .Values.appCpuLimit }}
+              memory: {{ .Values.appMemoryLimit }}
           volumeMounts:
             - name: config
               mountPath: "/config"
