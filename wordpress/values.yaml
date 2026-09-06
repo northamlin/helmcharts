@@ -44,3 +44,10 @@ hosting:
 
 # Disk for the chart's own MysqlCluster.
 dbStorage: 20Gi
+
+# The chart's own MysqlCluster. Requests are what the scheduler reserves and what
+# decides whether the pod fits; limits are the ceiling it may burst to.
+dbCpu: 100m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi

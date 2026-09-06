@@ -7,13 +7,23 @@ spec:
   secretName: {{ .Values.name }}-{{ .Values.uuid }}
   mysqlVersion: "8.0"
   podSpec:
+    # Start small and grow. These are the mysql container only -- the operator's own
+    # sidecar, metrics-exporter and pt-heartbeat carry their own defaults and are not
+    # settable from here.
+    #
+    # The limit is not what decides whether a deployment fits on a node; the request
+    # is. Raise dbCpu/dbMemory when a site is genuinely busy, not the limits.
+    #
+    # Do not take dbMemoryLimit below 512Mi: the operator sizes the InnoDB buffer pool
+    # from the memory limit, and MySQL 8.0's own baseline puts it near that floor
+    # already. Too low and the container OOMs on the first real query.
     resources:
       requests:
-        cpu: 200m
-        memory: 200Mi
+        cpu: {{ .Values.dbCpu }}
+        memory: {{ .Values.dbMemory }}
       limits:
-        cpu: 1000m
-        memory: 1Gi
+        cpu: {{ .Values.dbCpuLimit }}
+        memory: {{ .Values.dbMemoryLimit }}
   volumeSpec:
     persistentVolumeClaim:
       accessModes: [ "ReadWriteOnce" ]
