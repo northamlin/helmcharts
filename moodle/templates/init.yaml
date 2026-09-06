@@ -4,10 +4,16 @@ metadata:
   annotations:
     # A Job's pod template is immutable, so any change to this file -- adding resource
     # requests, bumping the seeder image -- makes ArgoCD try to patch a completed Job
-    # and fail the whole sync, permanently. Replace=true deletes and recreates it
-    # instead. The seeder is idempotent ("We already have the database"), so a rerun on
-    # the rare occasions the spec changes costs nothing.
-    argocd.argoproj.io/sync-options: Replace=true
+    # and fail the whole sync, permanently.
+    #
+    # Force is not optional next to Replace. Replace on its own is `kubectl replace`,
+    # which needs the selector and pod-template labels the Job controller generated at
+    # creation time and which are not in this file, so it fails with
+    # "spec.selector: Required value". Force makes it a delete-and-create.
+    #
+    # The seeder is idempotent -- it logs "We already have the database" -- so being
+    # recreated when the spec changes costs a few seconds and nothing else.
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
   name: {{ .Values.name }}-{{ .Values.uuid }}-db-init
 spec:
   template:
