@@ -70,10 +70,19 @@ for p in d.get('data', []):
 " "$name" 2>/dev/null
 }
 
+# Prints the documentId, or nothing if no service has this uuid. A failed lookup
+# (bad token, Strapi down) must stop the run: treating it as "not found" would
+# create a duplicate of every service.
 strapi_get_by_uuid() {
   local uuid="$1"
   curl -sg --globoff "${STRAPI_URL}/api/services?filters[uuid][\$eq]=${uuid}" "${HEADERS[@]}" \
-    | python3 -c "import sys,json; d=json.load(sys.stdin); items=d.get('data',[]); print(items[0]['documentId'] if items else '')" 2>/dev/null
+    | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+if not isinstance(d.get('data'), list):
+    sys.exit('Strapi lookup failed: ' + json.dumps(d.get('error') or d))
+print(d['data'][0]['documentId'] if d['data'] else '')
+"
 }
 
 strapi_post() {
@@ -86,11 +95,34 @@ strapi_put() {
   curl -s -X PUT "${STRAPI_URL}/api/services/${id}" "${HEADERS[@]}" -d "$payload"
 }
 
+is_internal() {
+  local name="$1" c
+  for c in "${INTERNAL_CHARTS[@]}"; do [[ "$c" == "$name" ]] && return 0; done
+  return 1
+}
+
+# Descriptions are written with \n escapes for readability; turn them into real
+# newlines so Strapi stores markdown, not a literal backslash-n.
+unescape_newlines() {
+  printf '%b' "$1"
+}
+
 json_escape() {
-  python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" <<< "$1"
+  python3 -c "import sys,json; s=sys.stdin.read(); print(json.dumps(s[:-1] if s.endswith(chr(10)) else s))" <<< "$1"
 }
 
 # ── chart definitions ─────────────────────────────────────────────────────────
+# Building-block charts that other charts and the deploy path use. They are not
+# products, so they are never published to Strapi as services.
+INTERNAL_CHARTS=(ingress namespace service sql-service)
+
+# Customer-facing name per chart. Charts not listed fall back to Chart.yaml's name.
+declare -A DISPLAY_NAMES=(
+  [kurrier]="Kurrier" [matomo]="Matomo" [mautic]="Mautic" [moodle]="Moodle"
+  [postal]="Postal" [radicale]="Radicale" [slackbot]="Slackbot"
+  [wikijs]="Wiki.js" [wordpress]="WordPress"
+)
+
 # Each entry: "chart_dir|uuid|display_name|description_markdown"
 # Description is auto-generated from Chart.yaml if not listed here.
 
@@ -122,6 +154,7 @@ echo ""
 CREATED=0
 UPDATED=0
 SKIPPED=0
+MANAGED_UUIDS=()
 
 for chart_dir in "$SCRIPT_DIR"/*/; do
   chart_name="$(basename "$chart_dir")"
@@ -130,25 +163,27 @@ for chart_dir in "$SCRIPT_DIR"/*/; do
 
   [[ -f "$chart_yaml" ]] || continue
 
-  # Derive uuid: prefer values.yaml uuid field, fall back to chart name
-  uuid=""
-  if [[ -f "$values_yaml" ]]; then
-    uuid=$(yaml_field "$values_yaml" "uuid")
-  fi
-  # Skip placeholder uuids
-  if [[ "$uuid" == "hbdftsrfed" || -z "$uuid" ]]; then
-    uuid="$chart_name"
+  if is_internal "$chart_name"; then
+    echo "[INTERNAL] $chart_name — building-block chart, not a service"
+    continue
   fi
 
-  display_name=$(yaml_field "$chart_yaml" "name")
+  # The chart directory name is the Strapi uuid — the one upsert key. values.yaml's
+  # uuid is a per-deployment placeholder (hbdftsrfed, 12345) and must not be used,
+  # or a placeholder change creates a second record for the same chart.
+  uuid="$chart_name"
+  MANAGED_UUIDS+=("$uuid")
+
+  display_name="${DISPLAY_NAMES[$chart_name]:-$(yaml_field "$chart_yaml" "name")}"
   description_raw="${DESCRIPTIONS[$chart_name]:-}"
 
   if [[ -z "$description_raw" ]]; then
     chart_desc=$(yaml_field "$chart_yaml" "description")
     description_raw="## $display_name\n\n$chart_desc"
   fi
+  description_raw=$(unescape_newlines "$description_raw")
 
-  existing_id=$(strapi_get_by_uuid "$uuid")
+  existing_id=$(strapi_get_by_uuid "$uuid") || exit 1
 
   # Prefer stripeProductId from values.yaml, then fall back to Stripe API name lookup
   stripe_product_id=""
@@ -168,7 +203,7 @@ for chart_dir in "$SCRIPT_DIR"/*/; do
       echo "[UPDATE] $chart_name (uuid=$uuid, id=$existing_id, stripeId=$stripe_product_id)"
       if [[ "$APPLY" = true ]]; then
         desc_json=$(json_escape "$description_raw")
-        payload="{\"data\":{\"name\":$(python3 -c "import json; print(json.dumps('$display_name'))"),\"desc\":${desc_json},\"uuid\":\"${uuid}\",\"stripeId\":\"${stripe_product_id}\"}}"
+        payload="{\"data\":{\"name\":$(json_escape "$display_name"),\"desc\":${desc_json},\"uuid\":\"${uuid}\",\"stripeId\":\"${stripe_product_id}\"}}"
         result=$(strapi_put "$existing_id" "$payload")
         updated_id=$(echo "$result" | python3 -c "import sys,json; d=json.load(sys.stdin); print((d.get('data') or {}).get('documentId') or (d.get('error') or {}).get('message','ERROR'))" 2>/dev/null)
         echo "        → updated documentId=$updated_id"
@@ -182,7 +217,7 @@ for chart_dir in "$SCRIPT_DIR"/*/; do
     echo "[CREATE] $chart_name (uuid=$uuid, stripeId=$stripe_product_id)"
     if [[ "$APPLY" = true ]]; then
       desc_json=$(json_escape "$description_raw")
-      name_json=$(python3 -c "import json; print(json.dumps('$display_name'))")
+      name_json=$(json_escape "$display_name")
       payload="{\"data\":{\"name\":${name_json},\"desc\":${desc_json},\"stripeId\":\"${stripe_product_id}\",\"uuid\":\"${uuid}\",\"price\":0}}"
       result=$(strapi_post "$payload")
       new_id=$(echo "$result" | python3 -c "import sys,json; d=json.load(sys.stdin); print((d.get('data') or {}).get('documentId') or (d.get('error') or {}).get('message','?'))" 2>/dev/null)
@@ -191,6 +226,23 @@ for chart_dir in "$SCRIPT_DIR"/*/; do
     fi
   fi
 done
+
+# Report Strapi services this script does not own: internal charts published by an
+# older version of this script, hand-made duplicates, or services with no chart.
+# They are listed, never deleted — removing a service is a human decision.
+echo ""
+echo "Strapi services not backed by a public chart (review and remove by hand):"
+curl -sg --globoff "${STRAPI_URL}/api/services?pagination[pageSize]=200&fields[0]=uuid&fields[1]=name" "${HEADERS[@]}" \
+  | python3 -c "
+import sys, json
+managed = set(sys.argv[1:])
+d = json.load(sys.stdin)
+if not isinstance(d.get('data'), list):
+    sys.exit('Strapi list failed: ' + json.dumps(d.get('error') or d))
+for s in d['data']:
+    if s.get('uuid') not in managed:
+        print(f\"  [UNMANAGED] {s.get('uuid')} — {s.get('name')} (documentId={s.get('documentId')})\")
+" "${MANAGED_UUIDS[@]}"
 
 echo ""
 echo "Done. Created=$CREATED Updated=$UPDATED Skipped=$SKIPPED"
