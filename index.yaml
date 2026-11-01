@@ -31,6 +31,29 @@ entries:
     urls:
     - kurrier-0.2.0.tgz
     version: 0.2.0
+  linkding:
+  - apiVersion: v2
+    appVersion: 1.47.0
+    created: "2026-11-01T19:05:28.788750301+01:00"
+    description: Self-hosted bookmark manager (linkding) with PostgreSQL.
+    digest: 083213c62f25587e6b3393f431113417e17ae6821e0f33fbf4d529420ad1e213
+    name: linkding
+    type: application
+    urls:
+    - linkding-0.1.0.tgz
+    version: 0.1.0
+  mailpit:
+  - apiVersion: v2
+    appVersion: v1.33.0
+    created: "2026-11-01T19:05:28.789893258+01:00"
+    description: 'Email testing tool (Mailpit): catches outgoing mail for inspection,
+      behind a login.'
+    digest: 9c159f9d16a84cb21b6a40c2ed1401a4e0fc8a1430388d8bf827e8ab149414fa
+    name: mailpit
+    type: application
+    urls:
+    - mailpit-0.1.0.tgz
+    version: 0.1.0
   matomo:
   - apiVersion: v2
     appVersion: 1.16.0
@@ -188,6 +211,18 @@ entries:
     urls:
     - namespace-0.1.1.tgz
     version: 0.1.1
+  ntfy:
+  - apiVersion: v2
+    appVersion: v2.36.0
+    created: "2026-11-01T19:05:28.791012327+01:00"
+    description: 'Push notifications over HTTP (ntfy): send alerts from scripts and
+      CI to phone and desktop.'
+    digest: ed28e9a896e42a7153171e5ec428ce8d85cbc5918d7755bdc74b233438986145
+    name: ntfy
+    type: application
+    urls:
+    - ntfy-0.1.0.tgz
+    version: 0.1.0
   postal:
   - apiVersion: v2
     appVersion: 1.16.0
@@ -218,6 +253,17 @@ entries:
     type: application
     urls:
     - postal-0.1.0.tgz
+    version: 0.1.0
+  qdrant:
+  - apiVersion: v2
+    appVersion: v1.20.0-unprivileged
+    created: "2026-11-01T19:05:28.792150463+01:00"
+    description: Vector database for AI search and RAG (Qdrant), API-key protected.
+    digest: a077f09f383354b6940ed473cdb2a8eb1e9f88b28c482fa366c626ef98478aa0
+    name: qdrant
+    type: application
+    urls:
+    - qdrant-0.1.0.tgz
     version: 0.1.0
   radicale:
   - apiVersion: v1
@@ -288,6 +334,17 @@ entries:
     name: sql-service
     urls:
     - sql-service-0.1.0.tgz
+    version: 0.1.0
+  verdaccio:
+  - apiVersion: v2
+    appVersion: 7.0.2
+    created: "2026-11-01T19:05:28.793429828+01:00"
+    description: Private npm registry and npmjs cache (Verdaccio), login required.
+    digest: 298bc587c752817f22271c960a84aa2dbf6a194897a879a1f504664a1a77ca81
+    name: verdaccio
+    type: application
+    urls:
+    - verdaccio-0.1.0.tgz
     version: 0.1.0
   wikijs:
   - apiVersion: v1
@@ -390,4 +447,4 @@ entries:
     urls:
     - wordpress-0.8.0.tgz
     version: 0.8.0
-generated: "2026-09-06T08:49:47.630451127+02:00"
+generated: "2026-11-01T19:05:28.787481064+01:00"
