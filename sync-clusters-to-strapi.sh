@@ -4,7 +4,9 @@
 # Idempotent and re-runnable:
 #   1. upsert the Domain   (by name)
 #   2. upsert the Cluster  (by name) and attach the domain
-#   3. attach EVERY service to that cluster
+#   3. move every LISTED service (one linked to any cluster) onto that cluster. A service
+#      with no cluster is delisted on purpose -- run.robots.beer hides it -- so it stays
+#      unlinked; strapi-publish.sh (robots-service skill) is what lists a new service.
 #   4. delete every other cluster  -- last, so step 3 never orphans a relation
 #
 # Usage:
@@ -134,12 +136,16 @@ else
   fi
 fi
 
-# ── 3. attach every service ──────────────────────────────────────────────────
+# ── 3. move every listed service ─────────────────────────────────────────────
 
 echo ""
 LINKED=0
 while IFS=$'\t' read -r svc_id svc_name svc_clusters; do
   [[ -z "$svc_id" ]] && continue
+  if [[ -z "$svc_clusters" ]]; then
+    echo "[SKIP]   service $svc_name — delisted (no cluster), left hidden"
+    continue
+  fi
   if [[ "$svc_clusters" == *"$CLUSTER_NAME"* && "$svc_clusters" != *","* ]]; then
     echo "[SKIP]   service $svc_name — already only on $CLUSTER_NAME"
     continue
