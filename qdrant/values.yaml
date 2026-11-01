@@ -1,0 +1,89 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Set by helmdeployer on every release (helmdeployer/src/generator.ts).
+# Do not rename these; the defaults here only matter for `helm template` and tests.
+# ─────────────────────────────────────────────────────────────────────────────
+name: qdrant
+uuid: dev00001
+url: qdrant.eu-up.apps.robots.beer
+replicaCount: 1
+# low | medium | high | custom  (custom uses cpu/memory below as request AND limit)
+resource: low
+cpu: 100m
+memory: 128Mi
+# App data disk. UpCloud block storage will not bind anything below 10Gi.
+storage: 10Gi
+storageClass: standard
+dbuser: app
+dbname: app
+dbpass: change-me-only-for-local-tests
+hosting:
+  tags: {}
+# `image` is ALSO sent, but it holds the chart name, not an image. Never read it.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart-owned. helmdeployer does not send these, so the defaults are what runs.
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  image: qdrant/qdrant
+  tag: "v1.20.0-unprivileged"
+  port: 6333
+  # /readyz and /healthz answer without the API key; everything else needs it.
+  healthPath: /readyz
+  probe: http
+  livenessProbe: ""
+  startupFailureThreshold: 60
+  command: []
+  args: []
+  env:
+    QDRANT__STORAGE__STORAGE_PATH: /qdrant/data/storage
+    QDRANT__STORAGE__SNAPSHOTS_PATH: /qdrant/data/snapshots
+    QDRANT__TELEMETRY_DISABLED: "true"
+  # The API key is the release's password: every request needs `api-key: <dbpass>`.
+  secretEnv:
+    QDRANT__SERVICE__API_KEY: password
+  configFiles: []
+  extraInitContainers: ""
+  persistence:
+    enabled: true
+    mountPath: /qdrant/data
+  extraMounts: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    runAsNonRoot: true
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+
+# The login the release is handed: username here, password = dbpass.
+auth:
+  username: admin
+
+# none | mysql | postgres
+database:
+  type: none
+  storage: 10Gi
+  mysqlVersion: "8.0"
+  postgresImage: ghcr.io/cloudnative-pg/postgresql:16
+
+# Untiered helper containers (redis, workers).
+appCpu: 50m
+appMemory: 128Mi
+appCpuLimit: 500m
+appMemoryLimit: 512Mi
+
+# The database. Keep dbMemoryLimit >= 512Mi for MySQL (buffer pool is sized from it).
+dbCpu: 50m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi
+
+# Init containers, seed Jobs, exporters.
+sidecarCpu: 10m
+sidecarMemory: 32Mi
+sidecarCpuLimit: 100m
+sidecarMemoryLimit: 128Mi

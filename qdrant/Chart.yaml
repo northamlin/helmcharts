@@ -1,0 +1,6 @@
+apiVersion: v2
+name: qdrant
+description: "Vector database for AI search and RAG (Qdrant), API-key protected."
+type: application
+version: 0.1.0
+appVersion: "v1.20.0-unprivileged"

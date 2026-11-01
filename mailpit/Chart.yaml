@@ -1,0 +1,6 @@
+apiVersion: v2
+name: mailpit
+description: "Email testing tool (Mailpit): catches outgoing mail for inspection, behind a login."
+type: application
+version: 0.1.0
+appVersion: "v1.33.0"

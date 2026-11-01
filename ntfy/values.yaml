@@ -1,0 +1,125 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Set by helmdeployer on every release (helmdeployer/src/generator.ts).
+# Do not rename these; the defaults here only matter for `helm template` and tests.
+# ─────────────────────────────────────────────────────────────────────────────
+name: ntfy
+uuid: dev00001
+url: ntfy.eu-up.apps.robots.beer
+replicaCount: 1
+# low | medium | high | custom  (custom uses cpu/memory below as request AND limit)
+resource: low
+cpu: 100m
+memory: 128Mi
+# App data disk. UpCloud block storage will not bind anything below 10Gi.
+storage: 10Gi
+storageClass: standard
+dbuser: app
+dbname: app
+dbpass: change-me-only-for-local-tests
+hosting:
+  tags: {}
+# `image` is ALSO sent, but it holds the chart name, not an image. Never read it.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart-owned. helmdeployer does not send these, so the defaults are what runs.
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  image: binwiederhier/ntfy
+  tag: "v2.36.0"
+  # Not 80: a non-root process can't bind it without NET_BIND_SERVICE.
+  port: 8080
+  healthPath: /v1/health
+  probe: http
+  livenessProbe: ""
+  startupFailureThreshold: 30
+  command: []
+  args: [serve]
+  env:
+    NTFY_CONFIG_FILE: /var/lib/ntfy/server.yml
+    NTFY_BASE_URL: "https://{{ .Values.url }}"
+    NTFY_LISTEN_HTTP: ":8080"
+    NTFY_BEHIND_PROXY: "true"
+    NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+    NTFY_AUTH_FILE: /var/lib/ntfy/user.db
+    NTFY_ATTACHMENT_CACHE_DIR: /var/lib/ntfy/attachments
+    # Locked down: nothing is readable or writable without logging in, and no sign-up.
+    NTFY_AUTH_DEFAULT_ACCESS: deny-all
+    NTFY_ENABLE_LOGIN: "true"
+    NTFY_ENABLE_SIGNUP: "false"
+    NTFY_UPSTREAM_BASE_URL: ""
+  secretEnv: {}
+  configFiles: []
+  # Writes /var/lib/ntfy/server.yml on every boot with the admin as a declarative user
+  # (auth-users, bcrypt of dbpass), so the login always matches the release's password.
+  extraInitContainers: |
+    - name: create-admin
+      image: "{{ .Values.app.image }}:{{ .Values.app.tag }}"
+      command:
+        - sh
+        - -ec
+        - |
+          hash=$(printf '%s\n%s\n' "$ADMIN_PASSWORD" "$ADMIN_PASSWORD" | ntfy user hash 2>/dev/null | grep -o '\$2[aby]\$.*')
+          [ -n "$hash" ] || { echo "could not hash the admin password"; exit 1; }
+          printf 'auth-users:\n  - "%s:%s:admin"\n' "$ADMIN_USER" "$hash" > /var/lib/ntfy/server.yml
+          chmod 600 /var/lib/ntfy/server.yml
+          echo "admin $ADMIN_USER provisioned"
+      env:
+        - name: ADMIN_USER
+          value: {{ .Values.auth.username | quote }}
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "robots.fullname" . }}-auth
+              key: password
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/ntfy
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+      resources:
+        {{- include "robots.sidecarResources" . | nindent 8 }}
+  persistence:
+    enabled: true
+    mountPath: /var/lib/ntfy
+  extraMounts: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    runAsNonRoot: true
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+
+# The login the release is handed: username here, password = dbpass.
+auth:
+  username: admin
+
+# none | mysql | postgres
+database:
+  type: none
+  storage: 10Gi
+  mysqlVersion: "8.0"
+  postgresImage: ghcr.io/cloudnative-pg/postgresql:16
+
+# Untiered helper containers (redis, workers).
+appCpu: 50m
+appMemory: 128Mi
+appCpuLimit: 500m
+appMemoryLimit: 512Mi
+
+# The database. Keep dbMemoryLimit >= 512Mi for MySQL (buffer pool is sized from it).
+dbCpu: 50m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi
+
+# Init containers, seed Jobs, exporters.
+sidecarCpu: 10m
+sidecarMemory: 32Mi
+sidecarCpuLimit: 100m
+sidecarMemoryLimit: 128Mi

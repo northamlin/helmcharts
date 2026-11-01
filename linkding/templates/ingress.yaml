@@ -1,0 +1,30 @@
+# Ingress name and TLS secret name are the bare hostname: helmdeployer strips the
+# scheme from `url`. Class goes in spec (the annotation is ignored by Traefik v2+);
+# never add http01-edit-in-place — ArgoCD selfHeal reverts the challenge path.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.url | quote }}
+  labels:
+    {{- include "robots.labels" . | nindent 4 }}
+  annotations:
+    cert-manager.io/cluster-issuer: http
+    kubernetes.io/tls-acme: "true"
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure,web
+    {{- include "robots.annotations" . | indent 4 }}
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [{{ .Values.url | quote }}]
+      secretName: {{ .Values.url | quote }}
+  rules:
+    - host: {{ .Values.url | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "robots.fullname" . }}
+                port:
+                  name: http

@@ -1,0 +1,122 @@
+{{- $full := include "robots.fullname" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $full }}
+  labels:
+    {{- include "robots.labels" . | nindent 4 }}
+  annotations:
+    {{- include "robots.annotations" . | indent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 3
+  # RWO volume: a rolling update would start the new pod while the old one still
+  # holds the disk, and it would never mount.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "robots.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "robots.selectorLabels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- toYaml .Values.app.podSecurityContext | nindent 8 }}
+      {{- if ne .Values.database.type "none" }}
+      initContainers:
+        # The operator needs 30-90s to bring the database up; without this the app
+        # crash-loops through its first migration.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z -w 2 {{ include "robots.dbHost" . }} {{ include "robots.dbPort" . }}; do echo waiting for db; sleep 3; done"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            runAsNonRoot: true
+            runAsUser: 65534
+          resources:
+            {{- include "robots.sidecarResources" . | nindent 12 }}
+      {{- end }}
+      containers:
+        - name: app
+          image: "{{ .Values.app.image }}:{{ .Values.app.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: {{ .Values.app.port }}
+          env:
+            {{- if ne .Values.database.type "none" }}
+            # linkding reads LD_DB_*.
+            - name: LD_DB_HOST
+              value: {{ include "robots.dbHost" . | quote }}
+            - name: LD_DB_PORT
+              value: {{ include "robots.dbPort" . | quote }}
+            - name: LD_DB_DATABASE
+              value: {{ .Values.dbname | quote }}
+            - name: LD_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "robots.dbSecret" . }}
+                  key: {{ include "robots.dbUserKey" . }}
+            - name: LD_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "robots.dbSecret" . }}
+                  key: {{ include "robots.dbPassKey" . }}
+            - name: LD_SUPERUSER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "robots.dbSecret" . }}
+                  key: {{ include "robots.dbPassKey" . }}
+            {{- end }}
+            {{- range $k, $v := .Values.app.env }}
+            - name: {{ $k }}
+              value: {{ tpl (toString $v) $ | quote }}
+            {{- end }}
+          resources:
+            {{- include "robots.tierResources" . | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.app.securityContext | nindent 12 }}
+          {{- $probe := dict "httpGet" (dict "path" .Values.app.healthPath "port" "http") }}
+          {{- if eq .Values.app.probe "tcp" }}
+          {{- $probe = dict "tcpSocket" (dict "port" "http") }}
+          {{- end }}
+          startupProbe:
+            {{- toYaml $probe | nindent 12 }}
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: {{ .Values.app.startupFailureThreshold }}
+          readinessProbe:
+            {{- toYaml $probe | nindent 12 }}
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          {{- $live := $probe }}
+          {{- if eq (default .Values.app.probe .Values.app.livenessProbe) "tcp" }}
+          {{- $live = dict "tcpSocket" (dict "port" "http") }}
+          {{- end }}
+          livenessProbe:
+            {{- toYaml $live | nindent 12 }}
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          {{- if .Values.app.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.app.persistence.mountPath }}
+            {{- range .Values.app.extraMounts }}
+            - name: data
+              mountPath: {{ .path }}
+              subPath: {{ .subPath }}
+            {{- end }}
+          {{- end }}
+      {{- if .Values.app.persistence.enabled }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $full }}-data
+      {{- end }}

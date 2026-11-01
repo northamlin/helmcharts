@@ -1,0 +1,146 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Set by helmdeployer on every release (helmdeployer/src/generator.ts).
+# Do not rename these; the defaults here only matter for `helm template` and tests.
+# ─────────────────────────────────────────────────────────────────────────────
+name: verdaccio
+uuid: dev00001
+url: verdaccio.eu-up.apps.robots.beer
+replicaCount: 1
+# low | medium | high | custom  (custom uses cpu/memory below as request AND limit)
+resource: low
+cpu: 100m
+memory: 128Mi
+# App data disk. UpCloud block storage will not bind anything below 10Gi.
+storage: 10Gi
+storageClass: standard
+dbuser: app
+dbname: app
+dbpass: change-me-only-for-local-tests
+hosting:
+  tags: {}
+# `image` is ALSO sent, but it holds the chart name, not an image. Never read it.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart-owned. helmdeployer does not send these, so the defaults are what runs.
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  image: verdaccio/verdaccio
+  tag: "7.0.2"
+  port: 4873
+  healthPath: /-/ping
+  probe: http
+  livenessProbe: ""
+  startupFailureThreshold: 30
+  command: []
+  args: []
+  env:
+    VERDACCIO_PUBLIC_URL: "https://{{ .Values.url }}"
+  secretEnv: {}
+  # Private by default: every package read, publish and unpublish needs a login. The one
+  # account is the admin the init container writes. max_users: 1 means nobody else can
+  # register (403). Not -1: that also blocks `npm login` for the existing admin.
+  configFiles:
+    - path: /verdaccio/conf/config.yaml
+      content: |
+        storage: /verdaccio/storage/data
+        plugins: /verdaccio/plugins
+        web:
+          title: Verdaccio
+          login: true
+        auth:
+          htpasswd:
+            file: /verdaccio/storage/htpasswd
+            max_users: 1
+        uplinks:
+          npmjs:
+            url: https://registry.npmjs.org/
+        packages:
+          '@*/*':
+            access: $authenticated
+            publish: $authenticated
+            unpublish: $authenticated
+            proxy: npmjs
+          '**':
+            access: $authenticated
+            publish: $authenticated
+            unpublish: $authenticated
+            proxy: npmjs
+        server:
+          keepAliveTimeout: 60
+        log: {type: stdout, format: pretty, level: http}
+  # Writes the admin's htpasswd line on every boot (bcrypt of dbpass via verdaccio's own
+  # bcryptjs), so the login always matches the release's password.
+  extraInitContainers: |
+    - name: create-admin
+      image: "{{ .Values.app.image }}:{{ .Values.app.tag }}"
+      command:
+        - node
+        - -e
+        - |
+          const fs = require("fs"), f = "/verdaccio/storage/htpasswd";
+          const bcrypt = require("/usr/local/lib/node_modules/verdaccio/node_modules/bcryptjs");
+          const keep = fs.existsSync(f) ? fs.readFileSync(f, "utf8").split("\n").filter(l => l && !l.startsWith(process.env.ADMIN_USER + ":")) : [];
+          const line = `${process.env.ADMIN_USER}:${bcrypt.hashSync(process.env.ADMIN_PASSWORD, 10)}`;
+          fs.mkdirSync("/verdaccio/storage/data", { recursive: true });
+          fs.writeFileSync(f, [line, ...keep].join("\n") + "\n", { mode: 0o600 });
+          console.log("admin", process.env.ADMIN_USER, "provisioned");
+      env:
+        - name: ADMIN_USER
+          value: {{ .Values.auth.username | quote }}
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "robots.fullname" . }}-auth
+              key: password
+      volumeMounts:
+        - name: data
+          mountPath: /verdaccio/storage
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+      resources:
+        {{- include "robots.sidecarResources" . | nindent 8 }}
+  persistence:
+    enabled: true
+    mountPath: /verdaccio/storage
+  extraMounts: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    runAsUser: 10001
+    runAsGroup: 65533
+    fsGroup: 65533
+    runAsNonRoot: true
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+
+# The login the release is handed: username here, password = dbpass.
+auth:
+  username: admin
+
+# none | mysql | postgres
+database:
+  type: none
+  storage: 10Gi
+  mysqlVersion: "8.0"
+  postgresImage: ghcr.io/cloudnative-pg/postgresql:16
+
+# Untiered helper containers (redis, workers).
+appCpu: 50m
+appMemory: 128Mi
+appCpuLimit: 500m
+appMemoryLimit: 512Mi
+
+# The database. Keep dbMemoryLimit >= 512Mi for MySQL (buffer pool is sized from it).
+dbCpu: 50m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi
+
+# Init containers, seed Jobs, exporters.
+sidecarCpu: 10m
+sidecarMemory: 32Mi
+sidecarCpuLimit: 100m
+sidecarMemoryLimit: 128Mi
