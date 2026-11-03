@@ -1,0 +1,158 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Set by helmdeployer on every release (helmdeployer/src/generator.ts).
+# Do not rename these; the defaults here only matter for `helm template` and tests.
+# ─────────────────────────────────────────────────────────────────────────────
+name: atuin
+uuid: dev00001
+url: atuin.eu-up.apps.robots.beer
+replicaCount: 1
+# low | medium | high | custom  (custom uses cpu/memory below as request AND limit)
+resource: low
+cpu: 100m
+memory: 128Mi
+# App data disk. UpCloud block storage will not bind anything below 10Gi.
+storage: 10Gi
+storageClass: standard
+dbuser: app
+dbname: app
+dbpass: change-me-only-for-local-tests
+hosting:
+  tags: {}
+# `image` is ALSO sent, but it holds the chart name, not an image. Never read it.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart-owned. helmdeployer does not send these, so the defaults are what runs.
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  image: ghcr.io/atuinsh/atuin
+  tag: "18.24.4"
+  port: 8888
+  # Static {"status":"healthy"}: no DB check, so liveness can use it too.
+  healthPath: /healthz
+  probe: http
+  probeExec: []
+  livenessProbe: ""
+  startupFailureThreshold: 60
+  # The image's entrypoint is atuin-server.
+  command: []
+  args: [start]
+  env:
+    # dbpass is base64url (URI-safe). $(DB_*) are expanded by the kubelet, so the password
+    # never appears in the pod spec.
+    ATUIN_DB_URI: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+    ATUIN_HOST: "0.0.0.0"
+    # Explicit, so a Service-link ATUIN_PORT=tcp://... can never override it.
+    ATUIN_PORT: "8888"
+    # ── Pinned lock-down ──
+    # Only the admin exists; `atuin register` is refused. Accounts are made by the init below.
+    ATUIN_OPEN_REGISTRATION: "false"
+    ATUIN_METRICS__ENABLE: "false"
+  secretEnv: {}
+  configFiles: []
+  # Runs after wait-for-db. Creates the admin (password = dbpass, on stdin) the first time;
+  # on every later boot the duplicate-username error is recognised and ignored, so a password
+  # changed with `atuin account change-password` survives restarts. Any other error fails.
+  # `admin user create` works with open_registration=false and runs the migrations itself.
+  extraInitContainers: |
+    - name: create-admin
+      image: "{{ .Values.app.image }}:{{ .Values.app.tag }}"
+      command:
+        - sh
+        - -c
+        - |
+          out=$(printf '%s\n' "$ADMIN_PASSWORD" | atuin-server admin user create --email "$ADMIN_EMAIL" "$ADMIN_USER" 2>&1)
+          rc=$?
+          if [ $rc -eq 0 ]; then echo "admin $ADMIN_USER created"; exit 0; fi
+          if echo "$out" | grep -q users_username_key; then echo "admin $ADMIN_USER exists"; exit 0; fi
+          echo "$out"; exit $rc
+      env:
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "robots.dbSecret" . }}
+              key: {{ include "robots.dbUserKey" . }}
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "robots.dbSecret" . }}
+              key: {{ include "robots.dbPassKey" . }}
+        - name: ATUIN_DB_URI
+          value: "postgres://$(DB_USER):$(DB_PASSWORD)@{{ include "robots.dbHost" . }}:{{ include "robots.dbPort" . }}/{{ .Values.dbname }}"
+        - name: ATUIN_OPEN_REGISTRATION
+          value: "false"
+        - name: ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "robots.fullname" . }}-auth
+              key: username
+        - name: ADMIN_EMAIL
+          value: "{{ tpl .Values.auth.username . }}@{{ .Values.url }}"
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "robots.fullname" . }}-auth
+              key: password
+      volumeMounts:
+        - name: config-dir
+          mountPath: /config
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        readOnlyRootFilesystem: true
+        capabilities: {drop: [ALL]}
+      resources:
+        {{- include "robots.sidecarResources" . | nindent 8 }}
+  extraContainers: ""
+  # atuin-server writes a default /config/server.toml on start; settings all come from env,
+  # so it is scratch. Named "config-dir": "config" is the template's ConfigMap volume name.
+  emptyDirs:
+    - {name: config-dir, mountPath: /config}
+  # History is end-to-end encrypted by the client and stored in Postgres; nothing on disk.
+  persistence:
+    enabled: false
+    mountPath: /data
+  extraMounts: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    # The image's own user `atuin`.
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  securityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+
+# The login the release is handed: the atuin username (letters, digits, hyphens).
+# Its email is <username>@<url>. Password = dbpass.
+auth:
+  username: admin
+
+# none | mysql | postgres
+database:
+  type: postgres
+  supported: [postgres]
+  storage: 10Gi
+  mysqlVersion: "8.0"
+  postgresImage: ghcr.io/cloudnative-pg/postgresql:16
+
+# Untiered helper containers (redis, workers).
+appCpu: 50m
+appMemory: 128Mi
+appCpuLimit: 500m
+appMemoryLimit: 512Mi
+
+# The database. Keep dbMemoryLimit >= 512Mi for MySQL (buffer pool is sized from it).
+dbCpu: 50m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi
+
+# Init containers, seed Jobs, exporters.
+sidecarCpu: 10m
+sidecarMemory: 32Mi
+sidecarCpuLimit: 100m
+sidecarMemoryLimit: 128Mi

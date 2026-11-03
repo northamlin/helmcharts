@@ -1,0 +1,135 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Set by helmdeployer on every release (helmdeployer/src/generator.ts).
+# Do not rename these; the defaults here only matter for `helm template` and tests.
+# ─────────────────────────────────────────────────────────────────────────────
+name: memos
+uuid: dev00001
+url: memos.eu-up.apps.robots.beer
+replicaCount: 1
+# low | medium | high | custom  (custom uses cpu/memory below as request AND limit)
+resource: low
+cpu: 100m
+memory: 128Mi
+# App data disk. UpCloud block storage will not bind anything below 10Gi.
+storage: 10Gi
+storageClass: standard
+dbuser: app
+dbname: app
+dbpass: change-me-only-for-local-tests
+hosting:
+  tags: {}
+# `image` is ALSO sent, but it holds the chart name, not an image. Never read it.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart-owned. helmdeployer does not send these, so the defaults are what runs.
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  image: neosmemo/memos
+  tag: "26.11.0"
+  port: 5230
+  # /healthz pings the database: 200 only when Postgres answers.
+  healthPath: /healthz
+  probe: http
+  probeExec: []
+  # A Postgres blip must not restart Memos.
+  livenessProbe: tcp
+  startupFailureThreshold: 60
+  command: []
+  args: []
+  env:
+    MEMOS_DRIVER: postgres
+    # libpq key=value DSN; $(DB_*) are expanded by Kubernetes from the DB env above.
+    MEMOS_DSN: "host=$(DB_HOST) port=$(DB_PORT) user=$(DB_USER) password=$(DB_PASSWORD) dbname=$(DB_NAME) sslmode=disable"
+    MEMOS_PORT: "5230"
+    MEMOS_INSTANCE_URL: "https://{{ .Values.url }}"
+  # MEMOS_ADMIN_PASSWORD is read by lock.json as ${env:MEMOS_ADMIN_PASSWORD}.
+  secretEnv:
+    MEMOS_ADMIN_PASSWORD: password
+  # Declarative configuration, applied in one transaction at every startup
+  # (--config-apply=startup, the default). It pins:
+  #   - the admin: users/<auth.username>, role ADMIN, password = dbpass (re-applied every boot,
+  #     so the login always matches the release's password)
+  #   - GENERAL: sign-up closed, no injected additional script/style
+  #   - ACCESS: PRIVATE, so nothing (explore page, memos) is readable without a login
+  configFiles:
+    - path: /etc/memos/config/lock.json
+      content: |
+        {
+          "instanceSettings": [
+            {
+              "name": "instance/settings/GENERAL",
+              "generalSetting": {
+                "disallowUserRegistration": true,
+                "additionalScript": "",
+                "additionalStyle": ""
+              }
+            },
+            {
+              "name": "instance/settings/ACCESS",
+              "accessSetting": {"accessMode": "INSTANCE_ACCESS_MODE_PRIVATE"}
+            }
+          ],
+          "users": [
+            {
+              "name": "users/{{ .Values.auth.username }}",
+              "username": "{{ .Values.auth.username }}",
+              "role": "ADMIN",
+              "password": "${env:MEMOS_ADMIN_PASSWORD}"
+            }
+          ]
+        }
+  # A second wait on the database. In the cluster it returns at once (wait-for-db already
+  # ran); it is here because local-run.sh skips wait-for-db and starts the app before the
+  # test Postgres listens on TCP, and Memos exits on its first failed connection.
+  extraInitContainers: ""
+  extraContainers: ""
+  emptyDirs: []
+  # Memos, users and settings live in Postgres; the volume holds locally stored attachments.
+  persistence:
+    enabled: true
+    mountPath: /var/opt/memos
+  extraMounts: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    # The image starts as root only to chown /var/opt/memos and su-exec to 10001. Starting as
+    # 10001 skips that block; fsGroup makes the volume writable instead.
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    runAsNonRoot: true
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+
+# The login the release is handed: username here, password = dbpass.
+# Memos usernames are [a-z0-9-]; keep it a plain name.
+auth:
+  username: admin
+
+# none | mysql | postgres
+database:
+  type: postgres
+  supported: [postgres]
+  storage: 10Gi
+  mysqlVersion: "8.0"
+  postgresImage: ghcr.io/cloudnative-pg/postgresql:16
+
+# Untiered helper containers (redis, workers).
+appCpu: 50m
+appMemory: 128Mi
+appCpuLimit: 500m
+appMemoryLimit: 512Mi
+
+# The database. Keep dbMemoryLimit >= 512Mi for MySQL (buffer pool is sized from it).
+dbCpu: 50m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi
+
+# Init containers, seed Jobs, exporters.
+sidecarCpu: 10m
+sidecarMemory: 32Mi
+sidecarCpuLimit: 100m
+sidecarMemoryLimit: 128Mi

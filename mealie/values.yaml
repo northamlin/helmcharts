@@ -1,0 +1,183 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Set by helmdeployer on every release (helmdeployer/src/generator.ts).
+# Do not rename these; the defaults here only matter for `helm template` and tests.
+# ─────────────────────────────────────────────────────────────────────────────
+name: mealie
+uuid: dev00001
+url: mealie.eu-up.apps.robots.beer
+replicaCount: 1
+# low | medium | high | custom  (custom uses cpu/memory below as request AND limit)
+resource: medium
+cpu: 100m
+memory: 128Mi
+# App data disk. UpCloud block storage will not bind anything below 10Gi.
+storage: 10Gi
+storageClass: standard
+dbuser: app
+dbname: app
+dbpass: change-me-only-for-local-tests
+hosting:
+  tags: {}
+# `image` is ALSO sent, but it holds the chart name, not an image. Never read it.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart-owned. helmdeployer does not send these, so the defaults are what runs.
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  image: ghcr.io/mealie-recipes/mealie
+  tag: "v3.30.0"
+  port: 9000
+  healthPath: /api/app/about
+  # A fresh Mealie seeds the admin changeme@example.com / MyPassword, which is public knowledge,
+  # and nothing in env can change it. bootstrap.py (below) replaces it on localhost. Until it has,
+  # /api/app/about/startup-info says "isFirstLogin":true (= a user with the default email
+  # exists), so the pod is not Ready and Traefik routes nothing to it.
+  probe: exec
+  probeExec:
+    - sh
+    - -c
+    - "curl -fs http://127.0.0.1:9000/api/app/about/startup-info | grep -q '\"isFirstLogin\":false'"
+  # startup-info reads the database; a Postgres blip must not restart Mealie.
+  livenessProbe: tcp
+  # First boot runs the alembic migrations on Postgres, then the bootstrap: allow 10 minutes.
+  startupFailureThreshold: 120
+  command: [sh, -ec]
+  args:
+    - python /etc/mealie/bootstrap.py & exec /app/run.sh
+  env:
+    DB_ENGINE: postgres
+    POSTGRES_SERVER: "$(DB_HOST)"
+    POSTGRES_PORT: "$(DB_PORT)"
+    POSTGRES_USER: "$(DB_USER)"
+    POSTGRES_PASSWORD: "$(DB_PASSWORD)"
+    POSTGRES_DB: "$(DB_NAME)"
+    BASE_URL: "https://{{ .Values.url }}"
+    # Pinned even though they are the defaults: no self-registration, no SSO / LDAP / header
+    # auth that could log someone in without the admin's password.
+    ALLOW_SIGNUP: "false"
+    ALLOW_PASSWORD_LOGIN: "true"
+    OIDC_AUTH_ENABLED: "false"
+    LDAP_AUTH_ENABLED: "false"
+    REVERSE_PROXY_AUTH_ENABLED: "false"
+    # Default is 5 failures -> locked for 24h, and the lock refuses even the right password, so
+    # five anonymous POSTs would lock the customer out for a day. The release password is 18
+    # random bytes (144 bits), so the lockout adds no protection against guessing it; 100
+    # failures -> 1h keeps a cap (~100 guesses/hour) for a weaker password a customer picks later.
+    SECURITY_MAX_LOGIN_ATTEMPTS: "100"
+    SECURITY_USER_LOCKOUT_TIME: "1"
+    # Server-side fetches (recipe import by URL, webhooks) already refuse private and internal
+    # addresses unless listed here. Keep it empty.
+    HTTP_ALLOW_LIST: ""
+  secretEnv:
+    ADMIN_EMAIL: username
+    ADMIN_PASSWORD: password
+  configFiles:
+    - path: /etc/mealie/bootstrap.py
+      content: |
+        # Replaces Mealie's seeded admin (changeme@example.com / MyPassword) with the release's
+        # login, on localhost, before the pod is Ready. Order matters: password first, then
+        # email. A restart between the two leaves the default email with the new password,
+        # which this script still recognises (it tries the release password first), and the
+        # probe keeps the pod unready until the email has changed too.
+        import json, os, time, urllib.request, urllib.parse, urllib.error
+        B = "http://127.0.0.1:9000"
+        DEF_EMAIL, DEF_PW = "changeme@example.com", "MyPassword"
+        EMAIL, PW = os.environ["ADMIN_EMAIL"].lower(), os.environ["ADMIN_PASSWORD"]
+
+        def call(method, path, body=None, token=None, form=False):
+            h = {"Authorization": "Bearer " + token} if token else {}
+            data = None
+            if body is not None:
+                if form:
+                    data = urllib.parse.urlencode(body).encode()
+                    h["Content-Type"] = "application/x-www-form-urlencoded"
+                else:
+                    data = json.dumps(body).encode()
+                    h["Content-Type"] = "application/json"
+            r = urllib.request.Request(B + path, data=data, headers=h, method=method)
+            with urllib.request.urlopen(r, timeout=10) as resp:
+                return json.loads(resp.read() or b"null")
+
+        def login(pw):
+            try:
+                return call("POST", "/api/auth/token", {"username": DEF_EMAIL, "password": pw}, form=True)["access_token"]
+            except urllib.error.HTTPError:
+                return None
+
+        def step():
+            if not call("GET", "/api/app/about/startup-info")["isFirstLogin"]:
+                return True
+            tok = login(PW)
+            if tok is None:
+                tok = login(DEF_PW)
+                if tok is None:
+                    print("bootstrap: neither the release password nor the default works", flush=True)
+                    return False
+                call("PUT", "/api/users/password", {"currentPassword": DEF_PW, "newPassword": PW}, tok)
+                print("bootstrap: default password replaced", flush=True)
+            me = call("GET", "/api/users/self", token=tok)
+            me.update(email=EMAIL, fullName="Admin")
+            call("PUT", "/api/users/" + me["id"], me, tok)
+            print("bootstrap: admin is now " + EMAIL, flush=True)
+            return not call("GET", "/api/app/about/startup-info")["isFirstLogin"]
+
+        for i in range(600):
+            time.sleep(2)
+            try:
+                if step():
+                    print("bootstrap: done", flush=True)
+                    break
+            except (urllib.error.URLError, OSError, ValueError, KeyError) as e:
+                if i % 15 == 0:
+                    print("bootstrap: waiting (" + str(e) + ")", flush=True)
+  extraInitContainers: ""
+  extraContainers: ""
+  emptyDirs: []
+  # Recipe images, backups, and the generated SECRET / SESSION_SECRET files.
+  persistence:
+    enabled: true
+    mountPath: /app/data
+  extraMounts: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    # run.sh only switches user (gosu) when started as root; started as 911 (its PUID) it
+    # skips that and needs no capabilities.
+    runAsUser: 911
+    runAsGroup: 911
+    fsGroup: 911
+    runAsNonRoot: true
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+
+# The login the release is handed: Mealie logs in by email. Templated.
+auth:
+  username: "admin@{{ .Values.url }}"
+
+# none | mysql | postgres
+database:
+  type: postgres
+  supported: [postgres]
+  storage: 10Gi
+  mysqlVersion: "8.0"
+  postgresImage: ghcr.io/cloudnative-pg/postgresql:16
+
+# Untiered helper containers (redis, workers).
+appCpu: 50m
+appMemory: 128Mi
+appCpuLimit: 500m
+appMemoryLimit: 512Mi
+
+# The database. Keep dbMemoryLimit >= 512Mi for MySQL (buffer pool is sized from it).
+dbCpu: 50m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi
+
+# Init containers, seed Jobs, exporters.
+sidecarCpu: 10m
+sidecarMemory: 32Mi
+sidecarCpuLimit: 100m
+sidecarMemoryLimit: 128Mi

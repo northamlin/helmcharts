@@ -1,0 +1,150 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Set by helmdeployer on every release (helmdeployer/src/generator.ts).
+# Do not rename these; the defaults here only matter for `helm template` and tests.
+# ─────────────────────────────────────────────────────────────────────────────
+name: vaultwarden
+uuid: dev00001
+url: vaultwarden.eu-up.apps.robots.beer
+replicaCount: 1
+# low | medium | high | custom  (custom uses cpu/memory below as request AND limit)
+resource: low
+cpu: 100m
+memory: 128Mi
+# App data disk. UpCloud block storage will not bind anything below 10Gi.
+storage: 10Gi
+storageClass: standard
+dbuser: app
+dbname: app
+dbpass: change-me-only-for-local-tests
+hosting:
+  tags: {}
+# `image` is ALSO sent, but it holds the chart name, not an image. Never read it.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart-owned. helmdeployer does not send these, so the defaults are what runs.
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  image: vaultwarden/server
+  tag: "1.37.5"
+  port: 8080
+  # /alive takes a DB connection, so liveness is tcp (a Postgres blip must not restart it).
+  healthPath: /alive
+  probe: http
+  probeExec: []
+  livenessProbe: tcp
+  startupFailureThreshold: 60
+  command: []
+  args: []
+  env:
+    # Non-root cannot bind the image's default :80.
+    ROCKET_PORT: "8080"
+    ROCKET_ADDRESS: "0.0.0.0"
+    DATABASE_URL: "postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+    DOMAIN: "https://{{ .Values.url }}"
+    # Not the image's /data: that directory exists root-owned in the image, and Docker
+    # (local-run.sh) copies its ownership onto a fresh volume, hiding the fsGroup. A path the
+    # image does not have behaves the same in Docker and on the cluster.
+    DATA_FOLDER: /var/lib/vaultwarden
+    # Closed sign-up. New accounts only through an invitation (admin panel or an org owner).
+    SIGNUPS_ALLOWED: "false"
+    INVITATIONS_ALLOWED: "true"
+    SIGNUPS_VERIFY: "false"
+    # The admin panel at /admin, token = dbpass (argon2-hashed at runtime, see the init
+    # container). Never disabled.
+    ADMIN_TOKEN_FILE: /run/vaultwarden/admin_token
+    DISABLE_ADMIN_TOKEN: "false"
+    PASSWORD_HINTS_ALLOWED: "false"
+    SHOW_PASSWORD_HINT: "false"
+    # Favicons are fetched server-side for every domain saved in a vault: refuse private and
+    # cluster-internal targets (SSRF), for icons and for every other outbound request.
+    ICON_SERVICE: internal
+    ICON_BLACKLIST_NON_GLOBAL_IPS: "true"
+    HTTP_REQUEST_BLOCK_NON_GLOBAL_IPS: "true"
+  secretEnv: {}
+  configFiles: []
+  # Hashes dbpass into an argon2id PHC string (`vaultwarden hash`, which only reads a TTY,
+  # hence `script`) and writes it to the token emptyDir for ADMIN_TOKEN_FILE. Runs on every
+  # boot: the salt is random, which is fine at runtime and never in a template. The prompt
+  # echo (which contains the password) is filtered out; only the hash reaches the file.
+  extraInitContainers: |
+    - name: hash-admin-token
+      image: "{{ .Values.app.image }}:{{ .Values.app.tag }}"
+      command:
+        - sh
+        - -ec
+        - |
+          out=/run/vaultwarden/admin_token
+          printf '%s\n%s\n' "$ADMIN_PASSWORD" "$ADMIN_PASSWORD" \
+            | script -qec "/vaultwarden hash --preset owasp" /dev/null \
+            | tr -d '\r' | sed -n "s/^ADMIN_TOKEN='\(.*\)'\$/\1/p" > "$out.tmp"
+          grep -q '^\$argon2id\$' "$out.tmp" || { echo "hashing the admin token failed"; exit 1; }
+          mv "$out.tmp" "$out"
+          echo "admin token hashed ($(cut -c1-30 "$out")...)"
+      env:
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "robots.fullname" . }}-auth
+              key: password
+      volumeMounts:
+        - name: token
+          mountPath: /run/vaultwarden
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        capabilities: {drop: [ALL]}
+      resources:
+        {{- include "robots.sidecarResources" . | nindent 8 }}
+  extraContainers: ""
+  # init -> app hand-off of the hashed admin token.
+  emptyDirs:
+    - {name: token, mountPath: /run/vaultwarden}
+  # rsa_key*.pem (signs every login session), attachments, sends, icon_cache, and config.json
+  # (settings saved in /admin, which override env).
+  persistence:
+    enabled: true
+    mountPath: /var/lib/vaultwarden
+  extraMounts: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    # The image runs as root by default, but nothing needs it once ROCKET_PORT > 1024.
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  securityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    capabilities:
+      drop: [ALL]
+
+# Vaultwarden has no admin *user*: the /admin panel takes a token, which is dbpass. The
+# customer then invites their own email from /admin. auth.username is not used for login.
+auth:
+  username: admin
+
+# none | mysql | postgres
+database:
+  type: postgres
+  supported: [postgres]
+  storage: 10Gi
+  mysqlVersion: "8.0"
+  postgresImage: ghcr.io/cloudnative-pg/postgresql:16
+
+# Untiered helper containers (redis, workers).
+appCpu: 50m
+appMemory: 128Mi
+appCpuLimit: 500m
+appMemoryLimit: 512Mi
+
+# The database. Keep dbMemoryLimit >= 512Mi for MySQL (buffer pool is sized from it).
+dbCpu: 50m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi
+
+# Init containers, seed Jobs, exporters.
+sidecarCpu: 10m
+sidecarMemory: 32Mi
+sidecarCpuLimit: 100m
+sidecarMemoryLimit: 128Mi

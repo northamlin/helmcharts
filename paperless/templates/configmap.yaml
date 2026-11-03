@@ -1,0 +1,13 @@
+{{- if .Values.app.configFiles }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "robots.fullname" . }}
+  labels:
+    {{- include "robots.labels" . | nindent 4 }}
+data:
+  {{- range $i, $f := .Values.app.configFiles }}
+  file-{{ $i }}: |
+    {{- tpl $f.content $ | nindent 4 }}
+  {{- end }}
+{{- end }}

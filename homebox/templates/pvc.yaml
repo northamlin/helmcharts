@@ -1,0 +1,17 @@
+{{- if .Values.app.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "robots.fullname" . }}-data
+  labels:
+    {{- include "robots.labels" . | nindent 4 }}
+  annotations:
+    {{- include "robots.annotations" . | indent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  # `standard` is not the cluster default; a claim without a class lands elsewhere.
+  storageClassName: {{ .Values.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.storage }}
+{{- end }}

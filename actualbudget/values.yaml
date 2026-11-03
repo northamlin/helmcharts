@@ -1,0 +1,170 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Set by helmdeployer on every release (helmdeployer/src/generator.ts).
+# Do not rename these; the defaults here only matter for `helm template` and tests.
+# ─────────────────────────────────────────────────────────────────────────────
+name: actualbudget
+uuid: dev00001
+url: actualbudget.eu-up.apps.robots.beer
+replicaCount: 1
+# low | medium | high | custom  (custom uses cpu/memory below as request AND limit)
+resource: low
+cpu: 100m
+memory: 128Mi
+# App data disk. UpCloud block storage will not bind anything below 10Gi.
+storage: 10Gi
+storageClass: standard
+dbuser: app
+dbname: app
+dbpass: change-me-only-for-local-tests
+hosting:
+  tags: {}
+# `image` is ALSO sent, but it holds the chart name, not an image. Never read it.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart-owned. helmdeployer does not send these, so the defaults are what runs.
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  image: actualbudget/actual-server
+  tag: "26.11.0"
+  port: 5006
+  # Static {"status":"UP"}; no database behind it (SQLite on the volume).
+  healthPath: /health
+  probe: http
+  probeExec: []
+  livenessProbe: ""
+  startupFailureThreshold: 60
+  command: []
+  args: []
+  # Pinned. Env beats /data/config.json (convict precedence), so a file on the volume cannot
+  # loosen these. The same set is repeated in the bootstrap init container below.
+  env:
+    ACTUAL_PORT: "5006"
+    ACTUAL_HOSTNAME: "0.0.0.0"
+    ACTUAL_DATA_DIR: /data
+    # Password only: "header" would trust an x-actual-password header from trustedAuthProxies,
+    # "openid" would let the server-side OpenID flow be (re)configured.
+    ACTUAL_LOGIN_METHOD: password
+    ACTUAL_ALLOWED_LOGIN_METHODS: password
+    # The CORS proxy (for frontend plugins) fetches any URL server-side: an open SSRF relay.
+    ACTUAL_CORS_PROXY_ENABLED: "false"
+    ACTUAL_USER_CREATION_MODE: manual
+  secretEnv: {}
+  configFiles: []
+  # Actual has no env var for the server password: a fresh server opens /account/bootstrap
+  # to whoever calls it first. This init container starts the server on 127.0.0.1 only,
+  # bootstraps it with dbpass, and stops it before the app is allowed to listen on 0.0.0.0.
+  # Idempotent: an already-bootstrapped server is left alone (the customer may have changed
+  # the password since). It exits non-zero if the server is still unbootstrapped, so the pod
+  # never serves an open bootstrap endpoint.
+  extraInitContainers: |
+    - name: bootstrap
+      image: "{{ .Values.app.image }}:{{ .Values.app.tag }}"
+      workingDir: /app
+      command:
+        - node
+        - -e
+        - |
+          const { spawn } = require("child_process");
+          const base = "http://127.0.0.1:5006/account";
+          const sleep = ms => new Promise(r => setTimeout(r, ms));
+          const srv = spawn("node", ["app.js"], { cwd: "/app", stdio: "inherit" });
+          let exited = false; srv.on("exit", () => { exited = true; });
+          const status = async () => (await (await fetch(base + "/needs-bootstrap")).json()).data;
+          (async () => {
+            let code = 1;
+            try {
+              let s;
+              for (let i = 0; i < 120 && !exited; i++) { try { s = await status(); break; } catch { await sleep(1000); } }
+              if (!s) throw new Error("server never answered on 127.0.0.1");
+              if (s.bootstrapped) { console.log("bootstrap: already bootstrapped"); code = 0; }
+              else {
+                const r = await fetch(base + "/bootstrap", { method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ password: process.env.ADMIN_PASSWORD }) });
+                const j = await r.json();
+                code = (await status()).bootstrapped ? 0 : 1;
+                console.log("bootstrap:", j.status, j.reason || "", code ? "FAILED" : "done");
+              }
+            } catch (e) { console.error("bootstrap:", e.message); }
+            srv.kill("SIGTERM");
+            for (let i = 0; i < 50 && !exited; i++) await sleep(100);
+            if (!exited) srv.kill("SIGKILL");
+            process.exit(code);
+          })();
+      env:
+        - name: ACTUAL_HOSTNAME
+          value: "127.0.0.1"
+        - name: ACTUAL_PORT
+          value: "5006"
+        - name: ACTUAL_DATA_DIR
+          value: /data
+        - name: ACTUAL_LOGIN_METHOD
+          value: password
+        - name: ACTUAL_ALLOWED_LOGIN_METHODS
+          value: password
+        - name: ACTUAL_CORS_PROXY_ENABLED
+          value: "false"
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "robots.fullname" . }}-auth
+              key: password
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        capabilities: {drop: [ALL]}
+      resources:
+        {{- include "robots.sidecarResources" . | nindent 8 }}
+  extraContainers: ""
+  emptyDirs: []
+  # server-files (account.sqlite: password hash, sessions) and user-files (budgets).
+  persistence:
+    enabled: true
+    mountPath: /data
+  extraMounts: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    # The image's `actual` user.
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+  securityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    capabilities:
+      drop: [ALL]
+
+# Actual has a single server password and no user name. The password is dbpass; auth.username
+# only fills the <fullname>-auth Secret and is not used for login.
+auth:
+  username: admin
+
+# none | mysql | postgres
+database:
+  type: none
+  supported: [none]
+  storage: 10Gi
+  mysqlVersion: "8.0"
+  postgresImage: ghcr.io/cloudnative-pg/postgresql:16
+
+# Untiered helper containers (redis, workers).
+appCpu: 50m
+appMemory: 128Mi
+appCpuLimit: 500m
+appMemoryLimit: 512Mi
+
+# The database. Keep dbMemoryLimit >= 512Mi for MySQL (buffer pool is sized from it).
+dbCpu: 50m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi
+
+# Init containers, seed Jobs, exporters.
+sidecarCpu: 10m
+sidecarMemory: 32Mi
+sidecarCpuLimit: 100m
+sidecarMemoryLimit: 128Mi

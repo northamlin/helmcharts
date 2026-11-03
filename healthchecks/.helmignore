@@ -1,0 +1,9 @@
+# Packaging excludes. `helm package` otherwise sweeps up everything in the chart
+# directory -- which put kurrier/hrb-cluster-values.yaml, live credentials, inside a
+# tarball headed for a public repo.
+*-cluster-values.yaml
+.claude/
+.git/
+.gitignore
+.DS_Store
+*.tgz

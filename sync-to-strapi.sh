@@ -126,6 +126,9 @@ declare -A DISPLAY_NAMES=(
   [verdaccio]="Verdaccio"
   [ntfy]="ntfy"
   [mailpit]="Mailpit"
+  [healthchecks]="Healthchecks" [vaultwarden]="Vaultwarden" [miniflux]="Miniflux"
+  [homebox]="Homebox" [actualbudget]="Actual Budget" [paperless]="Paperless-ngx"
+  [mealie]="Mealie" [atuin]="Atuin" [memos]="Memos"
 )
 
 # Each entry: "chart_dir|uuid|display_name|description_markdown"
@@ -156,6 +159,24 @@ DESCRIPTIONS[verdaccio]="## What is Verdaccio?\n\nVerdaccio is an open-source **
 DESCRIPTIONS[ntfy]="## What is ntfy?\n\nntfy is an open-source **push notification service**: send a notification to your phone or desktop with a single HTTP request.\n\n* \`curl -d \"deploy done\" https://your-ntfy/alerts\` from any script, cron job or CI pipeline\n* Android, iOS and web apps that subscribe to topics\n* Attachments, priorities, tags, click actions and scheduled delivery\n* Private by default: every topic needs a login"
 
 DESCRIPTIONS[mailpit]="## What is Mailpit?\n\nMailpit is an open-source **email testing tool**. It catches the mail your app sends, so you can inspect it without anything reaching a real inbox.\n\n* Modern web UI with HTML, text, headers and attachment views\n* REST API to send and assert on messages from tests and CI\n* HTML compatibility and link checks for your templates\n* Locked behind a login from the first boot"
+
+DESCRIPTIONS[healthchecks]="## What is Healthchecks?\n\nHealthchecks is a **cron job and backup monitoring** service: it tells you when a scheduled job did not run.\n\n* Give every cron job, backup or script a ping URL and add one curl call at its end\n* Get alerted when a ping is late, missing or reports failure\n* Grace periods, cron expressions and a clean dashboard of every job\n* Locked to your admin login from the first boot; sign-up is off"
+
+DESCRIPTIONS[vaultwarden]="## What is Vaultwarden?\n\nVaultwarden is a lightweight, open-source **password manager server**, compatible with the official Bitwarden apps and browser extensions.\n\n* Use the Bitwarden apps on phone, desktop and browser with your own server\n* Passwords, notes, cards and identities, end-to-end encrypted\n* Organizations and collections to share passwords with family or a team\n* Sign-up is closed: you invite each account from the admin page"
+
+DESCRIPTIONS[miniflux]="## What is Miniflux?\n\nMiniflux is a minimalist, fast **RSS and Atom feed reader**.\n\n* Follow blogs, news sites, release notes and YouTube channels in one place\n* Keyboard shortcuts, full-text fetching and a clean, distraction-free reader\n* Fever and Google Reader APIs for mobile apps, plus a REST API\n* Private by default: only your admin account can log in"
+
+DESCRIPTIONS[homebox]="## What is Homebox?\n\nHomebox is a **home inventory** system for the things you own.\n\n* Track items, locations, purchase dates, prices and warranties\n* Attach receipts, manuals and photos to each item\n* Print QR-code labels and find anything in seconds\n* Locked to your admin login from the first boot; sign-up is off"
+
+DESCRIPTIONS[actualbudget]="## What is Actual Budget?\n\nActual Budget is a local-first **personal budgeting** app based on envelope budgeting.\n\n* Give every euro a job and see where your money goes\n* Works offline and syncs across your devices through this server\n* Import bank files, set up rules and schedule recurring transactions\n* Protected by a server password from the first boot"
+
+DESCRIPTIONS[paperless]="## What is Paperless-ngx?\n\nPaperless-ngx is a **document management system** that turns your paper into a searchable online archive.\n\n* Upload scans and PDFs: they are OCR'd, indexed and fully searchable\n* Automatic tagging, correspondents and document types that learn from you\n* Keeps your originals plus archived PDF/A versions\n* Runs on the high tier for OCR; locked to your admin login, sign-up is off"
+
+DESCRIPTIONS[mealie]="## What is Mealie?\n\nMealie is a self-hosted **recipe manager and meal planner**.\n\n* Import recipes from any website by pasting its URL\n* Plan meals for the week and build shopping lists automatically\n* Scale servings, organise with tags and categories, and share with your household\n* The default admin is replaced with your own login before the first visit; sign-up is off"
+
+DESCRIPTIONS[atuin]="## What is Atuin?\n\nAtuin is a **shell history sync server**: your terminal history, searchable and synced across every machine.\n\n* Install the atuin CLI, run atuin login, and your history follows you between laptops and servers\n* History is end-to-end encrypted on your machines before it is uploaded\n* Works with bash, zsh, fish and nushell\n* No web UI: this is the sync backend. One account, created from your release password"
+
+DESCRIPTIONS[memos]="## What is Memos?\n\nMemos is a lightweight **note-taking** service for quick thoughts, snippets and journals.\n\n* Write in Markdown with tags, tasks and attachments\n* A timeline of everything you jotted down, with full-text search\n* Apps and a REST API for capturing notes from anywhere\n* Private: nothing is readable without logging in, and sign-up is off"
 
 DESCRIPTIONS[wikijs]="## What is Wiki.js?\n\nWiki.js is a modern, open-source **wiki platform** for team documentation and knowledge bases.\n\n* Write in Markdown, WYSIWYG or raw HTML, with live preview\n* Page trees, tags, full-text search and page history\n* Granular access control: public pages, private spaces or per-group permissions\n* Locked to your admin login from the first boot; sign-up is off"
 

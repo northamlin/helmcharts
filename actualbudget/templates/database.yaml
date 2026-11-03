@@ -1,0 +1,73 @@
+{{- $full := include "robots.fullname" . -}}
+{{- if eq .Values.database.type "mysql" }}
+# mysql-operator reads ROOT_PASSWORD/USER/PASSWORD/DATABASE from this secret.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $full }}
+  labels:
+    {{- include "robots.labels" . | nindent 4 }}
+type: Opaque
+data:
+  ROOT_PASSWORD: {{ .Values.dbpass | b64enc }}
+  USER: {{ .Values.dbuser | b64enc }}
+  PASSWORD: {{ .Values.dbpass | b64enc }}
+  DATABASE: {{ .Values.dbname | b64enc }}
+---
+apiVersion: mysql.presslabs.org/v1alpha1
+kind: MysqlCluster
+metadata:
+  name: {{ $full }}
+  labels:
+    {{- include "robots.labels" . | nindent 4 }}
+  annotations:
+    {{- include "robots.annotations" . | indent 4 }}
+spec:
+  replicas: 1
+  secretName: {{ $full }}
+  mysqlVersion: {{ .Values.database.mysqlVersion | quote }}
+  podSpec:
+    resources:
+      {{- include "robots.dbResources" . | nindent 6 }}
+  volumeSpec:
+    persistentVolumeClaim:
+      accessModes: [ReadWriteOnce]
+      storageClassName: {{ .Values.storageClass }}
+      resources:
+        requests:
+          storage: {{ .Values.database.storage }}
+{{- else if eq .Values.database.type "postgres" }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $full }}-pg-app
+  labels:
+    {{- include "robots.labels" . | nindent 4 }}
+type: kubernetes.io/basic-auth
+data:
+  username: {{ .Values.dbuser | b64enc }}
+  password: {{ .Values.dbpass | b64enc }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ $full }}-pg
+  labels:
+    {{- include "robots.labels" . | nindent 4 }}
+  annotations:
+    {{- include "robots.annotations" . | indent 4 }}
+spec:
+  instances: 1
+  imageName: {{ .Values.database.postgresImage }}
+  bootstrap:
+    initdb:
+      database: {{ .Values.dbname }}
+      owner: {{ .Values.dbuser }}
+      secret:
+        name: {{ $full }}-pg-app
+  resources:
+    {{- include "robots.dbResources" . | nindent 4 }}
+  storage:
+    size: {{ .Values.database.storage }}
+    storageClass: {{ .Values.storageClass }}
+{{- end }}
