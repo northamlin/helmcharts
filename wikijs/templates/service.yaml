@@ -1,19 +1,17 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Values.name }}-{{ .Values.uuid }}
+  name: {{ include "robots.fullname" . }}
   labels:
-    app: {{ .Values.name }}-wiki-pod
+    {{- include "robots.labels" . | nindent 4 }}
   annotations:
-      {{-  range $key, $topping := $.Values.hosting.tags }}
-      {{ $key }}: {{ $topping }}
-      {{- end }}
+    {{- include "robots.annotations" . | indent 4 }}
 spec:
   type: ClusterIP
-  ports:
-    - port: 80
-      targetPort: 3000
-      protocol: TCP
-      name: http
   selector:
-    app: {{ .Values.name }}-{{ .Values.uuid }}
+    {{- include "robots.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

@@ -1,0 +1,13 @@
+{{- $full := include "robots.fullname" . -}}
+# The release's login. password is dbpass, which helmdeployer generates per release, so it is
+# stable across ArgoCD syncs. Never generate it in the template.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $full }}-auth
+  labels:
+    {{- include "robots.labels" . | nindent 4 }}
+type: Opaque
+data:
+  username: {{ .Values.auth.username | b64enc }}
+  password: {{ .Values.dbpass | b64enc }}

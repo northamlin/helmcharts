@@ -1,6 +1,6 @@
-apiVersion: v1
-appVersion: "1.0"
-description: Install wiki.js with localdb
+apiVersion: v2
 name: wikijs
-version: 0.5.0
-
+description: "Wiki.js 2: a modern wiki with a Markdown editor, on Postgres, locked to an admin login from the first boot."
+type: application
+version: 1.0.0
+appVersion: "2.5.317"

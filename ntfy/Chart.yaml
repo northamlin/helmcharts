@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ntfy
+description: "Push notifications over HTTP (ntfy): send alerts from scripts and CI to phone and desktop."
+type: application
+version: 0.1.0
+appVersion: "v2.36.0"

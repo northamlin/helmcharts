@@ -112,15 +112,20 @@ json_escape() {
 }
 
 # ── chart definitions ─────────────────────────────────────────────────────────
-# Building-block charts that other charts and the deploy path use. They are not
-# products, so they are never published to Strapi as services.
-INTERNAL_CHARTS=(ingress namespace service sql-service)
+# Building-block charts that other charts and the deploy path use, and our own tools.
+# They are not products, so they are never published to Strapi as services.
+# slackbot: our own Slack/NATS bridge, dropped from the catalogue on 2026-11-01.
+INTERNAL_CHARTS=(ingress namespace service sql-service slackbot)
 
 # Customer-facing name per chart. Charts not listed fall back to Chart.yaml's name.
 declare -A DISPLAY_NAMES=(
   [kurrier]="Kurrier" [matomo]="Matomo" [mautic]="Mautic" [moodle]="Moodle"
-  [postal]="Postal" [radicale]="Radicale" [slackbot]="Slackbot"
-  [wikijs]="Wiki.js" [wordpress]="WordPress"
+  [postal]="Postal" [radicale]="Radicale"
+  [wikijs]="Wiki.js" [wordpress]="WordPress" [linkding]="linkding"
+  [qdrant]="Qdrant"
+  [verdaccio]="Verdaccio"
+  [ntfy]="ntfy"
+  [mailpit]="Mailpit"
 )
 
 # Each entry: "chart_dir|uuid|display_name|description_markdown"
@@ -139,11 +144,20 @@ DESCRIPTIONS[mautic]="## What is Mautic?\n\nMautic is an open-source **marketing
 
 DESCRIPTIONS[postal]="## What is Postal?\n\nPostal is a full-featured open-source **mail delivery platform** — a self-hosted alternative to SendGrid or Mailgun.\n\n* High-volume transactional and marketing email delivery\n* SMTP and HTTP API — drop-in compatible with most frameworks\n* Per-message delivery tracking: opens, clicks, bounces, spam complaints\n* Multi-tenant: manage multiple organizations and domains from one installation\n* RabbitMQ-backed queue for reliable async processing"
 
-DESCRIPTIONS[slackbot]="## What is Slackbot?\n\nSlackbot is a **custom Slack integration service** that runs your bot logic inside your own cluster.\n\n* Define custom slash commands that trigger backend logic\n* Subscribe to Slack events: messages, reactions, file uploads\n* Bridge Slack and internal systems: trigger deploys, alerts, or data lookups from chat\n* Bot tokens managed as Kubernetes secrets — never exposed outside the cluster"
 
 DESCRIPTIONS[moodle]="## What is Moodle?\n\nMoodle is the world's leading open-source **Learning Management System (LMS)**.\n\n* Deliver structured online courses with quizzes, assignments, and grading\n* Supports SCORM, video, forums, and interactive H5P content\n* Role-based access: students, teachers, and admins in one platform\n* Scales from small classrooms to universities with thousands of users"
 
-DESCRIPTIONS[wikijs]="## What is Wiki.js?\n\nWiki.js is a modern, open-source **wiki platform** with a powerful editor and flexible storage backends.\n\n* Write documentation in Markdown, WYSIWYG, or raw HTML\n* Git-backed storage: your wiki content lives in a version-controlled repository\n* Granular access control: public pages, private spaces, or per-group permissions\n* Full-text search, page trees, and rich media embedding"
+DESCRIPTIONS[linkding]="## What is linkding?\n\nlinkding is a minimal, fast, open-source **bookmark manager** you host yourself — a private alternative to Pocket or Raindrop.\n\n* Save, tag and full-text search bookmarks from one clean interface\n* Browser extensions for Firefox and Chrome, plus a bookmarklet for everything else\n* Archives page snapshots so links keep working after the site disappears\n* Import and export the standard Netscape HTML format — no lock-in\n* PostgreSQL-backed, ready to log in on first boot"
+
+DESCRIPTIONS[qdrant]="## What is Qdrant?\n\nQdrant is an open-source **vector database** for AI applications: semantic search, RAG and recommendations.\n\n* Store embeddings from OpenAI, Claude-based pipelines, Ollama or any model, and search them by similarity\n* Filter on payload fields while you search\n* Official clients for Python, TypeScript, Go, Rust and more, and works with LangChain and LlamaIndex\n* Protected by an API key from the first boot"
+
+DESCRIPTIONS[verdaccio]="## What is Verdaccio?\n\nVerdaccio is an open-source **private npm registry** and caching proxy for npmjs.org.\n\n* Publish private packages your team installs with plain \`npm\`, \`pnpm\` or \`yarn\`\n* Caches public packages, so installs are faster and survive npmjs outages\n* Works with scoped packages and your existing \`.npmrc\`\n* Private by default: every read and publish needs a login"
+
+DESCRIPTIONS[ntfy]="## What is ntfy?\n\nntfy is an open-source **push notification service**: send a notification to your phone or desktop with a single HTTP request.\n\n* \`curl -d \"deploy done\" https://your-ntfy/alerts\` from any script, cron job or CI pipeline\n* Android, iOS and web apps that subscribe to topics\n* Attachments, priorities, tags, click actions and scheduled delivery\n* Private by default: every topic needs a login"
+
+DESCRIPTIONS[mailpit]="## What is Mailpit?\n\nMailpit is an open-source **email testing tool**. It catches the mail your app sends, so you can inspect it without anything reaching a real inbox.\n\n* Modern web UI with HTML, text, headers and attachment views\n* REST API to send and assert on messages from tests and CI\n* HTML compatibility and link checks for your templates\n* Locked behind a login from the first boot"
+
+DESCRIPTIONS[wikijs]="## What is Wiki.js?\n\nWiki.js is a modern, open-source **wiki platform** for team documentation and knowledge bases.\n\n* Write in Markdown, WYSIWYG or raw HTML, with live preview\n* Page trees, tags, full-text search and page history\n* Granular access control: public pages, private spaces or per-group permissions\n* Locked to your admin login from the first boot; sign-up is off"
 
 # ── main loop ─────────────────────────────────────────────────────────────────
 

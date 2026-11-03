@@ -1,55 +1,129 @@
-# Default values for wikijs.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
-uuid: hbdftsrfed
-name: matte-wiki
-repo: requarks
-image: wiki:2
-dbuser: wiki
-dbpass: password
-dbname: wiki
-dburl: ""
-url: wiki.eu-up.apps.robots.beer
-# NOTE: this chart runs its own MySQL (templates/mysql.yaml) and the app addresses it
-# at <name>-<uuid>-mysql, derived in the templates. `dbhost` is not read any more --
-# run.robots.beer's deploy.js hardcodes it to "mysql", which was never a Service this
-# chart created once the name was templated.
-# dbhost: mysql
-
-hosting:
-  tags:
-    norh/deployname: wikijs
-    norh/resources: low
-    norh/deploydate: date
-    norh/userid: userid
-    norh/id: idss
-
-# The in-chart MySQL Deployment's disk. `standard` is the platform's UpCloud maxiops
-# class on eu-upcloud-1; it is deliberately not the cluster default, so a claim that
-# names nothing lands somewhere else.
+# ─────────────────────────────────────────────────────────────────────────────
+# Set by helmdeployer on every release (helmdeployer/src/generator.ts).
+# Do not rename these; the defaults here only matter for `helm template` and tests.
+# ─────────────────────────────────────────────────────────────────────────────
+name: wikijs
+uuid: dev00001
+url: wikijs.eu-up.apps.robots.beer
+replicaCount: 1
+# low | medium | high | custom  (custom uses cpu/memory below as request AND limit)
+resource: low
+cpu: 100m
+memory: 128Mi
+# App data disk. UpCloud block storage will not bind anything below 10Gi.
+storage: 10Gi
 storageClass: standard
-dbStorage: 20Gi
+dbuser: app
+dbname: app
+dbpass: change-me-only-for-local-tests
+hosting:
+  tags: {}
+# `image` is ALSO sent, but it holds the chart name, not an image. Never read it.
 
-# Supporting containers (redis, typesense, the mail workers, the in-chart app pods --
-# anything without a low/medium/high tier). Requests are what the scheduler reserves,
-# so keep them small; limits are the ceiling and exist so a container cannot be
-# OOM-killed at a number nobody chose. These blocks previously declared a CPU request
-# and nothing else, which left them BestEffort on memory -- first to be evicted, and
-# free to balloon until they took the node with them.
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart-owned. helmdeployer does not send these, so the defaults are what runs.
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  image: ghcr.io/requarks/wiki
+  tag: "2.5.317"
+  port: 3000
+  healthPath: /healthz
+  # The setup wizard answers 200 to every GET, /healthz included, so an HTTP probe would let
+  # traffic in while the wizard is open. Ready = /healthz returns Wiki.js's JSON {"ok":true},
+  # which only exists once setup is finished. It also checks the DB pool.
+  probe: exec
+  probeExec:
+    - node
+    - -e
+    - "fetch('http://127.0.0.1:3000/healthz').then(r => r.json()).then(j => process.exit(j.ok === true ? 0 : 1)).catch(() => process.exit(1))"
+  # The DB pool check must not restart the wiki when Postgres blips, so liveness is tcp.
+  livenessProbe: tcp
+  startupFailureThreshold: 60
+  # A fresh Wiki.js opens a setup wizard and whoever submits it first becomes admin.
+  # bootstrap.js submits it on localhost with the release's login before the pod is Ready.
+  command: [sh, -ec]
+  args:
+    - node /etc/wikijs/bootstrap.js & exec node --no-deprecation server
+  env:
+    DB_TYPE: postgres
+    # The template exports DB_PASSWORD; Wiki.js reads DB_PASS.
+    DB_PASS: "$(DB_PASSWORD)"
+    DB_SSL: "false"
+    SITE_URL: "https://{{ .Values.url }}"
+  secretEnv:
+    ADMIN_EMAIL: username
+    ADMIN_PASSWORD: password
+  configFiles:
+    - path: /etc/wikijs/bootstrap.js
+      content: |
+        // Finishes Wiki.js's first-run setup with the release's login, on localhost, before
+        // the pod is Ready. The setup wizard serves its HTML page for every GET; the real
+        // app answers /healthz with JSON. So: JSON = set up already, exit; HTML = finalize.
+        const base = 'http://127.0.0.1:3000'
+        const sleep = ms => new Promise(r => setTimeout(r, ms))
+        ;(async () => {
+          for (let i = 0; i < 900; i++) {
+            await sleep(2000)
+            let h
+            try { h = await fetch(base + '/healthz') } catch { continue }  // not listening yet
+            if ((h.headers.get('content-type') || '').includes('json')) return
+            const r = await fetch(base + '/finalize', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                adminEmail: process.env.ADMIN_EMAIL,
+                adminPassword: process.env.ADMIN_PASSWORD,
+                siteUrl: process.env.SITE_URL,
+                telemetry: false
+              })
+            }).catch(e => null)
+            const j = r ? await r.json().catch(() => ({ error: 'not json' })) : { error: 'no answer' }
+            if (j.ok) { console.log('bootstrap: setup finished, admin ' + process.env.ADMIN_EMAIL); return }
+            console.log('bootstrap: finalize failed: ' + j.error)
+          }
+        })()
+  extraInitContainers: ""
+  # Pages, users and uploads live in Postgres; /wiki/data is only a cache.
+  persistence:
+    enabled: false
+    mountPath: /wiki/data
+  extraMounts: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  securityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    capabilities:
+      drop: [ALL]
+
+# The login the release is handed: Wiki.js logs in by email. Templated.
+auth:
+  username: "admin@{{ .Values.url }}"
+
+# none | mysql | postgres
+database:
+  type: postgres
+  storage: 10Gi
+  mysqlVersion: "8.0"
+  postgresImage: ghcr.io/cloudnative-pg/postgresql:16
+
+# Untiered helper containers (redis, workers).
 appCpu: 50m
 appMemory: 128Mi
 appCpuLimit: 500m
 appMemoryLimit: 512Mi
 
-# The chart's own MySQL. Same split: small reservation, generous ceiling.
+# The database. Keep dbMemoryLimit >= 512Mi for MySQL (buffer pool is sized from it).
 dbCpu: 50m
 dbMemory: 256Mi
 dbCpuLimit: 500m
 dbMemoryLimit: 768Mi
 
-# Sidecars and one-shot seed Jobs: the metrics exporter, the uggla sidecar, the SQL
-# seeders. Tiny, but they still need a request the scheduler can see and a limit that
-# is not left to chance.
+# Init containers, seed Jobs, exporters.
 sidecarCpu: 10m
 sidecarMemory: 32Mi
 sidecarCpuLimit: 100m

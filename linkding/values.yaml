@@ -1,0 +1,93 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Set by helmdeployer on every release (helmdeployer/src/generator.ts).
+# Do not rename these; the defaults here only matter for `helm template` and tests.
+# ─────────────────────────────────────────────────────────────────────────────
+name: linkding
+uuid: dev00001
+url: linkding.eu-up.apps.robots.beer
+replicaCount: 1
+# low | medium | high | custom  (custom uses cpu/memory below as request AND limit)
+resource: low
+cpu: 100m
+memory: 128Mi
+# App data disk. UpCloud block storage will not bind anything below 10Gi.
+storage: 10Gi
+storageClass: standard
+dbuser: app
+dbname: app
+dbpass: change-me-only-for-local-tests
+hosting:
+  tags: {}
+# `image` is ALSO sent, but it holds the chart name, not an image. Never read it.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart-owned. helmdeployer does not send these, so the defaults are what runs.
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  image: sissbruecker/linkding
+  tag: "1.47.0"
+  port: 9090
+  # Unauthenticated path that answers 2xx/3xx once the app can serve.
+  # /health returns 200 only when the DB connection works (500 otherwise).
+  healthPath: /health
+  # http | tcp — tcp only when the app has no unauthenticated 2xx/3xx path.
+  probe: http
+  # Liveness only. Set to tcp when healthPath also checks the database: otherwise a DB
+  # blip restarts a perfectly healthy app. Empty = same as `probe`.
+  # /health checks the DB, so liveness uses tcp: a DB restart must not restart linkding.
+  livenessProbe: tcp
+  # startupProbe runs every 5s; this many failures = how long first boot may take.
+  startupFailureThreshold: 60
+  # Plain env vars. Values are templated, so "{{ .Values.url }}" works.
+  env:
+    LD_DB_ENGINE: postgres
+    # Behind Traefik's TLS termination the Origin is https://<url>; without this every
+    # login POST fails with "CSRF verification failed" (403).
+    LD_CSRF_TRUSTED_ORIGINS: "https://{{ .Values.url }}"
+    # First-boot admin. The password is the release's generated dbpass (wired in the
+    # Deployment from the DB secret) -- the wizard produces no other secret.
+    LD_SUPERUSER_NAME: admin
+  persistence:
+    enabled: true
+    # secret key file, favicons, previews, assets
+    mountPath: /etc/linkding/data
+  # Additional subPaths of the same volume, e.g. [{path: /config, subPath: config}]
+  extraMounts: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    # Set runAsUser/runAsGroup/fsGroup when the image runs as a non-root UID.
+    # fsGroup: 1000
+  securityContext:
+    allowPrivilegeEscalation: false
+    # bootstrap.sh runs as root, chowns /etc/linkding/data to www-data, then uwsgi drops
+    # to www-data -- so it needs exactly these, and not drop-ALL alone.
+    capabilities:
+      drop: [ALL]
+      add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
+    # runAsNonRoot: true
+
+# none | mysql | postgres
+database:
+  type: postgres
+  storage: 10Gi
+  mysqlVersion: "8.0"
+  postgresImage: ghcr.io/cloudnative-pg/postgresql:16
+
+# Untiered helper containers (redis, workers).
+appCpu: 50m
+appMemory: 128Mi
+appCpuLimit: 500m
+appMemoryLimit: 512Mi
+
+# The database. Keep dbMemoryLimit >= 512Mi for MySQL (buffer pool is sized from it).
+dbCpu: 50m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi
+
+# Init containers, seed Jobs, exporters.
+sidecarCpu: 10m
+sidecarMemory: 32Mi
+sidecarCpuLimit: 100m
+sidecarMemoryLimit: 128Mi
