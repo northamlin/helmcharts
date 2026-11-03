@@ -1,5 +1,51 @@
 apiVersion: v1
 entries:
+  actualbudget:
+  - apiVersion: v2
+    appVersion: 26.11.0
+    created: "2026-11-03T14:39:01.266332417+01:00"
+    description: Actual Budget, a local-first envelope budgeting app with a sync server.
+    digest: bfc5ccc0acc6b769957c603b42d8931d211ee26b11e7233c9e91cae7dafb4ac4
+    name: actualbudget
+    type: application
+    urls:
+    - actualbudget-0.1.0.tgz
+    version: 0.1.0
+  atuin:
+  - apiVersion: v2
+    appVersion: 18.24.4
+    created: "2026-11-03T14:39:01.266940561+01:00"
+    description: 'Atuin sync server: end-to-end encrypted shell history sync, with
+      PostgreSQL.'
+    digest: 54c4626a2776c4871e959414881621b88f0d59525c245901d7302ca6b21719bb
+    name: atuin
+    type: application
+    urls:
+    - atuin-0.1.0.tgz
+    version: 0.1.0
+  healthchecks:
+  - apiVersion: v2
+    appVersion: v5.0.3
+    created: "2026-11-03T14:39:01.267575666+01:00"
+    description: Cron job and background task monitoring (Healthchecks) with PostgreSQL.
+    digest: 4a3a81f321bd19b1803971521ef5dd9d094cdc986d7f112390814ed4fe71d830
+    name: healthchecks
+    type: application
+    urls:
+    - healthchecks-0.1.0.tgz
+    version: 0.1.0
+  homebox:
+  - apiVersion: v2
+    appVersion: 0.27.1
+    created: "2026-11-03T14:39:01.268128911+01:00"
+    description: Homebox, a home inventory and organization system for the things
+      you own.
+    digest: a2a744db8be843035d8f1bd09badc141deef64cf76ac58ba75121d949abecdcf
+    name: homebox
+    type: application
+    urls:
+    - homebox-0.1.0.tgz
+    version: 0.1.0
   ingress:
   - apiVersion: v1
     appVersion: "1.0"
@@ -136,6 +182,42 @@ entries:
     urls:
     - mautic-0.1.0.tgz
     version: 0.1.0
+  mealie:
+  - apiVersion: v2
+    appVersion: v3.30.0
+    created: "2026-11-03T14:39:01.268787623+01:00"
+    description: 'Mealie: a self-hosted recipe manager and meal planner with URL recipe
+      import.'
+    digest: 4a84ce1b3488aaae8ee86cc2b2452c7f1c2c56a5702bf3efff6e0797e3420537
+    name: mealie
+    type: application
+    urls:
+    - mealie-0.1.0.tgz
+    version: 0.1.0
+  memos:
+  - apiVersion: v2
+    appVersion: 26.11.0
+    created: "2026-11-03T14:39:01.269417559+01:00"
+    description: 'Memos: a lightweight, self-hosted note-taking and microblogging
+      service.'
+    digest: 8e7aefb338b934712c4620f42f424811f1b6af89aa74cb26686ecf5f6b073ba6
+    name: memos
+    type: application
+    urls:
+    - memos-0.1.0.tgz
+    version: 0.1.0
+  miniflux:
+  - apiVersion: v2
+    appVersion: 2.3.5
+    created: "2026-11-03T14:39:01.270017252+01:00"
+    description: Minimalist, opinionated RSS and Atom feed reader (Miniflux) with
+      PostgreSQL.
+    digest: 94cb3edccf9bab560b3feb7e8535fccc294daf89383720b8d027edc910c472dd
+    name: miniflux
+    type: application
+    urls:
+    - miniflux-0.1.0.tgz
+    version: 0.1.0
   moodle:
   - apiVersion: v2
     appVersion: "1.0"
@@ -222,6 +304,18 @@ entries:
     type: application
     urls:
     - ntfy-0.1.0.tgz
+    version: 0.1.0
+  paperless:
+  - apiVersion: v2
+    appVersion: 3.4.1
+    created: "2026-11-03T14:39:01.270793234+01:00"
+    description: 'Paperless-ngx: a document management system that OCRs, indexes and
+      archives your scanned paper.'
+    digest: 35fc7912c9e1c59b81c575ac392b35700ee36681c0e73b1d54ebdade471db8c2
+    name: paperless
+    type: application
+    urls:
+    - paperless-0.1.0.tgz
     version: 0.1.0
   postal:
   - apiVersion: v2
@@ -334,6 +428,18 @@ entries:
     name: sql-service
     urls:
     - sql-service-0.1.0.tgz
+    version: 0.1.0
+  vaultwarden:
+  - apiVersion: v2
+    appVersion: 1.37.5
+    created: "2026-11-03T14:39:01.272549637+01:00"
+    description: Vaultwarden, a lightweight Bitwarden-compatible password manager
+      server.
+    digest: ce4c45c660614287d8ea65be17a19bf6c6fc76558ff0036976ad41b94dc47b62
+    name: vaultwarden
+    type: application
+    urls:
+    - vaultwarden-0.1.0.tgz
     version: 0.1.0
   verdaccio:
   - apiVersion: v2
@@ -458,4 +564,4 @@ entries:
     urls:
     - wordpress-0.8.0.tgz
     version: 0.8.0
-generated: "2026-11-01T20:38:08.588386511+01:00"
+generated: "2026-11-03T14:39:01.26560833+01:00"
