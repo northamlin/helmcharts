@@ -1,0 +1,6 @@
+apiVersion: v2
+name: miniflux
+description: "Minimalist, opinionated RSS and Atom feed reader (Miniflux) with PostgreSQL."
+type: application
+version: 0.1.0
+appVersion: "2.3.5"

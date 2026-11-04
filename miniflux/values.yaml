@@ -1,0 +1,114 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Set by helmdeployer on every release (helmdeployer/src/generator.ts).
+# Do not rename these; the defaults here only matter for `helm template` and tests.
+# ─────────────────────────────────────────────────────────────────────────────
+name: miniflux
+uuid: dev00001
+url: miniflux.eu-up.apps.robots.beer
+replicaCount: 1
+# low | medium | high | custom  (custom uses cpu/memory below as request AND limit)
+resource: low
+cpu: 100m
+memory: 128Mi
+# App data disk. UpCloud block storage will not bind anything below 10Gi.
+storage: 10Gi
+storageClass: standard
+dbuser: app
+dbname: app
+dbpass: change-me-only-for-local-tests
+hosting:
+  tags: {}
+# `image` is ALSO sent, but it holds the chart name, not an image. Never read it.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart-owned. helmdeployer does not send these, so the defaults are what runs.
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  image: miniflux/miniflux
+  tag: "2.3.5"
+  port: 8080
+  # /healthcheck pings the database: 200 "OK" when it answers, 500 otherwise.
+  healthPath: /healthcheck
+  probe: http
+  probeExec: []
+  # /healthcheck checks the DB, so liveness is tcp: a Postgres blip must not restart Miniflux.
+  livenessProbe: tcp
+  startupFailureThreshold: 60
+  command: []
+  args: []
+  env:
+    # libpq key=value DSN. $(DB_*) are the template's DB env vars, expanded by Kubernetes,
+    # so the password never appears in the rendered manifest.
+    DATABASE_URL: "host=$(DB_HOST) port=$(DB_PORT) user=$(DB_USER) password=$(DB_PASSWORD) dbname=$(DB_NAME) sslmode=disable"
+    RUN_MIGRATIONS: "1"
+    # Creates the admin on first boot (skipped once the user exists). Miniflux has no
+    # self-service sign-up at all: only an admin can create users.
+    CREATE_ADMIN: "1"
+    BASE_URL: "https://{{ .Values.url }}"
+    LISTEN_ADDR: "0.0.0.0:8080"
+    # Pinned lock-down (these are also the upstream defaults; pinned so an upgrade can't flip them).
+    # Feeds are fetched from URLs the user types in: refuse private/cluster addresses (SSRF).
+    FETCHER_ALLOW_PRIVATE_NETWORKS: "0"
+    FETCHER_ALLOW_PRIVATE_FEED_PROXY: "0"
+    INTEGRATION_ALLOW_PRIVATE_NETWORKS: "0"
+    METRICS_COLLECTOR: "0"
+    DISABLE_LOCAL_AUTH: "0"
+    AUTH_PROXY_HEADER: ""
+    AUTH_PROXY_USER_CREATION: "0"
+    OAUTH2_USER_CREATION: "0"
+    # Sized for the low tier (upstream default is 16 parallel fetchers).
+    WORKER_POOL_SIZE: "4"
+  # The admin login: username = auth.username, password = dbpass.
+  secretEnv:
+    ADMIN_USERNAME: username
+    ADMIN_PASSWORD: password
+  configFiles: []
+  extraInitContainers: ""
+  extraContainers: ""
+  emptyDirs: []
+  # Feeds, entries, users and sessions all live in Postgres; Miniflux writes nothing to disk.
+  persistence:
+    enabled: false
+    mountPath: /data
+  extraMounts: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    runAsUser: 65534
+    runAsGroup: 65534
+  securityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+
+# The login the release is handed: username here, password = dbpass.
+auth:
+  username: admin
+
+# none | mysql | postgres
+database:
+  type: postgres
+  supported: [postgres]
+  storage: 10Gi
+  mysqlVersion: "8.0"
+  postgresImage: ghcr.io/cloudnative-pg/postgresql:16
+
+# Untiered helper containers (redis, workers).
+appCpu: 50m
+appMemory: 128Mi
+appCpuLimit: 500m
+appMemoryLimit: 512Mi
+
+# The database. Keep dbMemoryLimit >= 512Mi for MySQL (buffer pool is sized from it).
+dbCpu: 50m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi
+
+# Init containers, seed Jobs, exporters.
+sidecarCpu: 10m
+sidecarMemory: 32Mi
+sidecarCpuLimit: 100m
+sidecarMemoryLimit: 128Mi

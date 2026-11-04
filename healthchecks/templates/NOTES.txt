@@ -1,0 +1,1 @@
+{{ .Chart.Name }} → https://{{ .Values.url }}

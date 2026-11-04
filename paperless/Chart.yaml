@@ -1,0 +1,6 @@
+apiVersion: v2
+name: paperless
+description: "Paperless-ngx: a document management system that OCRs, indexes and archives your scanned paper."
+type: application
+version: 0.1.0
+appVersion: "3.4.1"

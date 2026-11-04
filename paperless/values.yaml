@@ -1,0 +1,170 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Set by helmdeployer on every release (helmdeployer/src/generator.ts).
+# Do not rename these; the defaults here only matter for `helm template` and tests.
+# ─────────────────────────────────────────────────────────────────────────────
+name: paperless
+uuid: dev00001
+url: paperless.eu-up.apps.robots.beer
+replicaCount: 1
+# low | medium | high | custom. Default high: OCR (tesseract + ocrmypdf) is the memory peak. The wizard always sends its own choice.
+resource: high
+cpu: 100m
+memory: 128Mi
+# App data disk. UpCloud block storage will not bind anything below 10Gi.
+storage: 10Gi
+storageClass: standard
+dbuser: app
+dbname: app
+dbpass: change-me-only-for-local-tests
+hosting:
+  tags: {}
+# `image` is ALSO sent, but it holds the chart name, not an image. Never read it.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart-owned. helmdeployer does not send these, so the defaults are what runs.
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  image: ghcr.io/paperless-ngx/paperless-ngx
+  tag: "3.4.1"
+  port: 8000
+  # The login page answers 200 without a session. It does not prove the worker is up, but
+  # the worker has no port of its own; s6 restarts it inside the container if it dies.
+  healthPath: /accounts/login/
+  probe: http
+  probeExec: []
+  # A Postgres blip must not restart the pod.
+  livenessProbe: tcp
+  # First boot: s6 init, ~200 Django migrations, superuser. Allow 10 minutes.
+  startupFailureThreshold: 120
+  command: []
+  args: []
+  env:
+    PAPERLESS_DBENGINE: postgresql
+    PAPERLESS_DBHOST: "$(DB_HOST)"
+    PAPERLESS_DBPORT: "$(DB_PORT)"
+    PAPERLESS_DBNAME: "$(DB_NAME)"
+    PAPERLESS_DBUSER: "$(DB_USER)"
+    PAPERLESS_DBPASS: "$(DB_PASSWORD)"
+    # The redis:7.4.12-alpine sidecar below, on the pod's loopback.
+    PAPERLESS_REDIS: redis://127.0.0.1:6379
+    PAPERLESS_URL: "https://{{ .Values.url }}"
+    # Required, and must stay stable across syncs: a deterministic hash of dbpass.
+    PAPERLESS_SECRET_KEY: '{{ printf "paperless-ngx-secret-key:%s" .Values.dbpass | sha256sum }}'
+    # Data and media live on one volume (persistence.mountPath).
+    PAPERLESS_DATA_DIR: /usr/src/paperless/store/data
+    PAPERLESS_MEDIA_ROOT: /usr/src/paperless/store/media
+    PAPERLESS_SCRATCH_DIR: /tmp/paperless
+    # First-boot admin: created once by s6's init-superuser before the webserver listens
+    # (manage_superuser skips it when the user or any superuser exists, so restarts are safe).
+    PAPERLESS_ADMIN_MAIL: "admin@{{ .Values.url }}"
+    # Lock-down, pinned explicitly.
+    PAPERLESS_ACCOUNT_ALLOW_SIGNUPS: "false"
+    PAPERLESS_SOCIALACCOUNT_ALLOW_SIGNUPS: "false"
+    PAPERLESS_ENABLE_HTTP_REMOTE_USER: "false"
+    PAPERLESS_ENABLE_HTTP_REMOTE_USER_API: "false"
+    PAPERLESS_DISABLE_REGULAR_LOGIN: "false"
+    PAPERLESS_DEBUG: "false"
+    PAPERLESS_ENABLE_UPDATE_CHECK: "false"
+    # Server-side fetches (workflow webhooks, mail accounts, AI / remote-OCR endpoints) must not
+    # reach cluster-internal addresses.
+    PAPERLESS_WEBHOOKS_ALLOW_INTERNAL_REQUESTS: "false"
+    PAPERLESS_EMAIL_ALLOW_INTERNAL_HOSTS: "false"
+    PAPERLESS_AI_LLM_ALLOW_INTERNAL_ENDPOINTS: "false"
+    PAPERLESS_REMOTE_OCR_ALLOW_INTERNAL_ENDPOINTS: "false"
+    # One Celery worker, one OCR thread, one web worker: OCR is the memory peak.
+    PAPERLESS_TASK_WORKERS: "1"
+    PAPERLESS_THREADS_PER_WORKER: "1"
+    PAPERLESS_WEBSERVER_WORKERS: "1"
+    # The image ships eng/deu/fra/ita/spa (+ more) tesseract data. Do not set
+    # PAPERLESS_OCR_LANGUAGES: it apt-installs packages at boot, which a non-root pod cannot.
+    PAPERLESS_OCR_LANGUAGE: eng
+  secretEnv:
+    PAPERLESS_ADMIN_USER: username
+    PAPERLESS_ADMIN_PASSWORD: password
+  configFiles: []
+  extraInitContainers: ""
+  # The Celery broker. Loopback only, no persistence: queued tasks are re-created from the
+  # consume flow, and nothing Paperless keeps for good lives in Redis.
+  extraContainers: |
+    - name: redis
+      image: redis:7.4.12-alpine
+      args: ["redis-server", "--bind", "127.0.0.1", "--port", "6379", "--save", "", "--appendonly", "no", "--protected-mode", "yes"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+      resources:
+        {{- include "robots.sidecarResources" . | nindent 8 }}
+      startupProbe:
+        exec: {command: ["redis-cli", "-h", "127.0.0.1", "ping"]}
+        periodSeconds: 2
+        failureThreshold: 30
+      readinessProbe:
+        exec: {command: ["redis-cli", "-h", "127.0.0.1", "ping"]}
+        periodSeconds: 10
+        timeoutSeconds: 5
+      livenessProbe:
+        exec: {command: ["redis-cli", "-h", "127.0.0.1", "ping"]}
+        periodSeconds: 20
+        timeoutSeconds: 5
+  # s6-overlay writes its state under /run, which a non-root user can't do in the image.
+  # consume/export are scratch: uploads arrive via the API/web UI, not a shared folder.
+  emptyDirs:
+    - {name: run, mountPath: /run}
+    - {name: tmp, mountPath: /tmp}
+    - {name: consume, mountPath: /usr/src/paperless/consume}
+    - {name: export, mountPath: /usr/src/paperless/export}
+  # data (search index, classifier, logs) and media (originals, archive PDFs, thumbnails).
+  persistence:
+    enabled: true
+    mountPath: /usr/src/paperless/store
+  extraMounts: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    # Starting as 1000 (the image's paperless user) makes s6 skip usermod/chown and run
+    # every service directly, so no capabilities are needed.
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    runAsNonRoot: true
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+
+# The login the release is handed: username here, password = dbpass.
+auth:
+  username: admin
+
+# OCR needs ~600 MiB idle and ~900 MiB peak: low (512Mi) would be OOM-killed and medium (1Gi)
+# is tight, so every release gets at least the high tier whatever the wizard sent.
+minResource: high
+
+# none | mysql | postgres
+database:
+  type: postgres
+  supported: [postgres]
+  storage: 10Gi
+  mysqlVersion: "8.0"
+  postgresImage: ghcr.io/cloudnative-pg/postgresql:16
+
+# Untiered helper containers (redis, workers).
+appCpu: 50m
+appMemory: 128Mi
+appCpuLimit: 500m
+appMemoryLimit: 512Mi
+
+# The database. Keep dbMemoryLimit >= 512Mi for MySQL (buffer pool is sized from it).
+dbCpu: 50m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi
+
+# Init containers, seed Jobs, exporters.
+sidecarCpu: 10m
+sidecarMemory: 32Mi
+sidecarCpuLimit: 100m
+sidecarMemoryLimit: 128Mi

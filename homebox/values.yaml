@@ -1,0 +1,172 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Set by helmdeployer on every release (helmdeployer/src/generator.ts).
+# Do not rename these; the defaults here only matter for `helm template` and tests.
+# ─────────────────────────────────────────────────────────────────────────────
+name: homebox
+uuid: dev00001
+url: homebox.eu-up.apps.robots.beer
+replicaCount: 1
+# low | medium | high | custom  (custom uses cpu/memory below as request AND limit)
+resource: low
+cpu: 100m
+memory: 128Mi
+# App data disk. UpCloud block storage will not bind anything below 10Gi.
+storage: 10Gi
+storageClass: standard
+dbuser: app
+dbname: app
+dbpass: change-me-only-for-local-tests
+hosting:
+  tags: {}
+# `image` is ALSO sent, but it holds the chart name, not an image. Never read it.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart-owned. helmdeployer does not send these, so the defaults are what runs.
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  image: ghcr.io/sysadminsmedia/homebox
+  tag: "0.27.1"
+  port: 7745
+  # Answers 200 with {"health":true,...} without login.
+  healthPath: /api/v1/status
+  probe: http
+  probeExec: []
+  livenessProbe: ""
+  startupFailureThreshold: 60
+  # Image default: /app/api /data/config.yml (the file is optional; env is the config).
+  command: []
+  args: []
+  env:
+    HBOX_MODE: production
+    HBOX_WEB_PORT: "7745"
+    HBOX_OPTIONS_HOSTNAME: "{{ .Values.url }}"
+    # Closed: nobody but the init container below ever registers. (This also blocks the
+    # *first* user, hence the init container.)
+    HBOX_OPTIONS_ALLOW_REGISTRATION: "false"
+    HBOX_OPTIONS_ALLOW_LOCAL_LOGIN: "true"
+    HBOX_OIDC_ENABLED: "false"
+    HBOX_OPTIONS_GITHUB_RELEASE_CHECK: "false"
+    HBOX_OPTIONS_ALLOW_ANALYTICS: "false"
+    # Notifier URLs are typed in by the user (shoutrrr: webhooks etc.); refuse private,
+    # loopback, bogon and cloud-metadata targets so it cannot probe the cluster network.
+    HBOX_NOTIFIER_BLOCK_LOCAL_NETS: "true"
+    HBOX_NOTIFIER_BLOCK_LOCALHOST: "true"
+    HBOX_NOTIFIER_BLOCK_BOGON_NETS: "true"
+    HBOX_NOTIFIER_BLOCK_CLOUD_METADATA: "true"
+    # Required (>= 32 bytes). Deterministic from dbpass so it is stable across ArgoCD syncs;
+    # changing it invalidates every API key the customer created.
+    HBOX_AUTH_API_KEY_PEPPER: '{{ printf "homebox-api-key-pepper:%s" .Values.dbpass | sha256sum }}'
+  secretEnv: {}
+  configFiles: []
+  # HBOX_OPTIONS_ALLOW_REGISTRATION=false blocks even the first user, and there is no env var
+  # for an admin. So: start the server on 127.0.0.1 with registration on, register the admin
+  # (auth.username / dbpass), stop it. A marker on the volume makes later boots skip it, so a
+  # password the customer changed is never touched. Exits non-zero (pod not started) when the
+  # admin could not be created, rather than starting an app with nobody able to log in.
+  extraInitContainers: |
+    - name: create-admin
+      image: "{{ .Values.app.image }}:{{ .Values.app.tag }}"
+      command:
+        - sh
+        - -ec
+        - |
+          marker=/data/.robots-admin-created
+          [ -f "$marker" ] && { echo "admin already created"; exit 0; }
+          HBOX_WEB_HOST=127.0.0.1 HBOX_OPTIONS_ALLOW_REGISTRATION=true /app/api /data/config.yml >/tmp/init.log 2>&1 &
+          pid=$!
+          api=http://127.0.0.1:7745/api/v1
+          up=no
+          for i in $(seq 1 90); do wget -q -O /dev/null $api/status 2>/dev/null && { up=yes; break; }; sleep 1; done
+          rc=1
+          if [ $up = yes ]; then
+            body=$(printf '{"name":"admin","email":"%s","password":"%s"}' "$ADMIN_EMAIL" "$ADMIN_PASSWORD")
+            login=$(printf '{"username":"%s","password":"%s"}' "$ADMIN_EMAIL" "$ADMIN_PASSWORD")
+            if wget -q -O /dev/null --header 'Content-Type: application/json' --post-data "$body" $api/users/register; then
+              echo "registered $ADMIN_EMAIL"; rc=0
+            elif wget -q -O /dev/null --header 'Content-Type: application/json' --post-data "$login" $api/users/login; then
+              echo "$ADMIN_EMAIL already exists"; rc=0
+            else
+              echo "could not register $ADMIN_EMAIL"; tail -20 /tmp/init.log
+            fi
+          else
+            echo "server never came up on 127.0.0.1"; tail -20 /tmp/init.log
+          fi
+          kill $pid 2>/dev/null || true; wait $pid 2>/dev/null || true
+          [ $rc = 0 ] && touch "$marker"
+          exit $rc
+      env:
+        - name: HBOX_MODE
+          value: production
+        - name: HBOX_WEB_PORT
+          value: "7745"
+        - name: HBOX_OPTIONS_GITHUB_RELEASE_CHECK
+          value: "false"
+        - name: HBOX_AUTH_API_KEY_PEPPER
+          value: {{ printf "homebox-api-key-pepper:%s" .Values.dbpass | sha256sum | quote }}
+        - name: ADMIN_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "robots.fullname" . }}-auth
+              key: username
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "robots.fullname" . }}-auth
+              key: password
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        capabilities: {drop: [ALL]}
+      resources:
+        {{- include "robots.sidecarResources" . | nindent 8 }}
+  extraContainers: ""
+  emptyDirs: []
+  # homebox.db (SQLite, WAL) and uploaded attachments/thumbnails.
+  persistence:
+    enabled: true
+    mountPath: /data
+  extraMounts: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  securityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    capabilities:
+      drop: [ALL]
+
+# The login the release is handed. Homebox logs in by email; templated. Password = dbpass.
+auth:
+  username: "admin@{{ .Values.url }}"
+
+# none | mysql | postgres
+database:
+  type: none
+  supported: [none]
+  storage: 10Gi
+  mysqlVersion: "8.0"
+  postgresImage: ghcr.io/cloudnative-pg/postgresql:16
+
+# Untiered helper containers (redis, workers).
+appCpu: 50m
+appMemory: 128Mi
+appCpuLimit: 500m
+appMemoryLimit: 512Mi
+
+# The database. Keep dbMemoryLimit >= 512Mi for MySQL (buffer pool is sized from it).
+dbCpu: 50m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi
+
+# Init containers, seed Jobs, exporters.
+sidecarCpu: 10m
+sidecarMemory: 32Mi
+sidecarCpuLimit: 100m
+sidecarMemoryLimit: 128Mi

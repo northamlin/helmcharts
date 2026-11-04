@@ -1,0 +1,6 @@
+apiVersion: v2
+name: memos
+description: "Memos: a lightweight, self-hosted note-taking and microblogging service."
+type: application
+version: 0.1.0
+appVersion: "26.11.0"

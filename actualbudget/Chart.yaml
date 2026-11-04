@@ -1,0 +1,6 @@
+apiVersion: v2
+name: actualbudget
+description: "Actual Budget, a local-first envelope budgeting app with a sync server."
+type: application
+version: 0.1.0
+appVersion: "26.11.0"

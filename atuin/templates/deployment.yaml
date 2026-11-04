@@ -1,0 +1,171 @@
+{{- $full := include "robots.fullname" . -}}
+{{- $vols := or .Values.app.persistence.enabled .Values.app.configFiles .Values.app.emptyDirs -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $full }}
+  labels:
+    {{- include "robots.labels" . | nindent 4 }}
+  annotations:
+    {{- include "robots.annotations" . | indent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 3
+  # RWO volume: a rolling update would start the new pod while the old one still
+  # holds the disk, and it would never mount.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "robots.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "robots.selectorLabels" . | nindent 8 }}
+      {{- if .Values.app.configFiles }}
+      annotations:
+        # Roll the pod when a rendered config file changes (hashing the raw values would miss
+        # changes that only arrive through tpl, e.g. auth.username or url).
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum | trunc 16 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- toYaml .Values.app.podSecurityContext | nindent 8 }}
+      {{- if or (ne .Values.database.type "none") .Values.app.extraInitContainers }}
+      initContainers:
+      {{- end }}
+      {{- if ne .Values.database.type "none" }}
+        # The operator needs 30-90s to bring the database up; without this the app
+        # crash-loops through its first migration.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z -w 2 {{ include "robots.dbHost" . }} {{ include "robots.dbPort" . }}; do echo waiting for db; sleep 3; done"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            runAsNonRoot: true
+            runAsUser: 65534
+          resources:
+            {{- include "robots.sidecarResources" . | nindent 12 }}
+      {{- end }}
+      {{- with .Values.app.extraInitContainers }}
+        {{- tpl . $ | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: app
+          image: "{{ .Values.app.image }}:{{ .Values.app.tag }}"
+          imagePullPolicy: IfNotPresent
+          {{- with .Values.app.command }}
+          command: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.app.args }}
+          args: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.app.port }}
+          env:
+            {{- if ne .Values.database.type "none" }}
+            # DB env — rename these to what the app reads. Build a URL from them with
+            # $(DB_PASSWORD)-style references *below* this block if it wants one.
+            - name: DB_HOST
+              value: {{ include "robots.dbHost" . | quote }}
+            - name: DB_PORT
+              value: {{ include "robots.dbPort" . | quote }}
+            - name: DB_NAME
+              value: {{ .Values.dbname | quote }}
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "robots.dbSecret" . }}
+                  key: {{ include "robots.dbUserKey" . }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "robots.dbSecret" . }}
+                  key: {{ include "robots.dbPassKey" . }}
+            {{- end }}
+            {{- range $k, $v := .Values.app.secretEnv }}
+            - name: {{ $k }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $full }}-auth
+                  key: {{ $v }}
+            {{- end }}
+            {{- range $k, $v := .Values.app.env }}
+            - name: {{ $k }}
+              value: {{ tpl (toString $v) $ | quote }}
+            {{- end }}
+          resources:
+            {{- include "robots.tierResources" . | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.app.securityContext | nindent 12 }}
+          {{- $probe := dict "httpGet" (dict "path" .Values.app.healthPath "port" "http") }}
+          {{- if eq .Values.app.probe "tcp" }}
+          {{- $probe = dict "tcpSocket" (dict "port" "http") }}
+          {{- else if eq .Values.app.probe "exec" }}
+          {{- $probe = dict "exec" (dict "command" .Values.app.probeExec) }}
+          {{- end }}
+          startupProbe:
+            {{- toYaml $probe | nindent 12 }}
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: {{ .Values.app.startupFailureThreshold }}
+          readinessProbe:
+            {{- toYaml $probe | nindent 12 }}
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          {{- $live := $probe }}
+          {{- if eq (default .Values.app.probe .Values.app.livenessProbe) "tcp" }}
+          {{- $live = dict "tcpSocket" (dict "port" "http") }}
+          {{- end }}
+          livenessProbe:
+            {{- toYaml $live | nindent 12 }}
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          {{- if $vols }}
+          volumeMounts:
+            {{- if .Values.app.persistence.enabled }}
+            - name: data
+              mountPath: {{ .Values.app.persistence.mountPath }}
+            {{- range .Values.app.extraMounts }}
+            - name: data
+              mountPath: {{ .path }}
+              subPath: {{ .subPath }}
+            {{- end }}
+            {{- end }}
+            {{- range $i, $f := .Values.app.configFiles }}
+            - name: config
+              mountPath: {{ $f.path }}
+              subPath: file-{{ $i }}
+              readOnly: true
+            {{- end }}
+            {{- range .Values.app.emptyDirs }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+            {{- end }}
+          {{- end }}
+        {{- with .Values.app.extraContainers }}
+        {{- tpl . $ | nindent 8 }}
+        {{- end }}
+      {{- if $vols }}
+      volumes:
+        {{- if .Values.app.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $full }}-data
+        {{- end }}
+        {{- if .Values.app.configFiles }}
+        - name: config
+          configMap:
+            name: {{ $full }}
+        {{- end }}
+        {{- range .Values.app.emptyDirs }}
+        - name: {{ .name }}
+          emptyDir: {}
+        {{- end }}
+      {{- end }}

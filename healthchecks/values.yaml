@@ -1,0 +1,198 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Set by helmdeployer on every release (helmdeployer/src/generator.ts).
+# Do not rename these; the defaults here only matter for `helm template` and tests.
+# ─────────────────────────────────────────────────────────────────────────────
+name: healthchecks
+uuid: dev00001
+url: healthchecks.eu-up.apps.robots.beer
+replicaCount: 1
+# low | medium | high | custom  (custom uses cpu/memory below as request AND limit)
+resource: low
+cpu: 100m
+memory: 128Mi
+# App data disk. UpCloud block storage will not bind anything below 10Gi.
+storage: 10Gi
+storageClass: standard
+dbuser: app
+dbname: app
+dbpass: change-me-only-for-local-tests
+hosting:
+  tags: {}
+# `image` is ALSO sent, but it holds the chart name, not an image. Never read it.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart-owned. helmdeployer does not send these, so the defaults are what runs.
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  image: healthchecks/healthchecks
+  tag: "v5.0.3"
+  port: 8000
+  # /health runs SELECT 1 and answers "OK". It is handled by a middleware that runs before
+  # Django's ALLOWED_HOSTS check, so kubelet's Host: <pod-ip> is fine.
+  healthPath: /health
+  probe: http
+  probeExec: []
+  # /health checks the DB, so liveness is tcp: a Postgres blip must not restart the app.
+  livenessProbe: tcp
+  startupFailureThreshold: 60
+  # The image's run.sh: migrate, sendalerts + sendreports in the background, gunicorn.
+  command: []
+  args: []
+  env:
+    # The template's DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD are exactly what
+    # Healthchecks reads once DB=postgres.
+    DB: postgres
+    DB_SSLMODE: prefer
+    SITE_ROOT: "https://{{ .Values.url }}"
+    SITE_NAME: Healthchecks
+    # Written by the init container (sha256 of dbpass: deterministic, never in a manifest).
+    SECRET_KEY_FILE: /run/hc/secret_key
+    # Traefik terminates TLS; without this Django sees http and CSRF rejects the https Origin.
+    SECURE_PROXY_SSL_HEADER: "HTTP_X_FORWARDED_PROTO,https"
+    GUNICORN_WORKERS: "2"
+    # ── Pinned lock-down ──
+    DEBUG: "False"
+    REGISTRATION_OPEN: "False"
+    # Shell-command integration runs arbitrary commands on the server: never.
+    SHELL_ENABLED: "False"
+    # Apprise accepts arbitrary notification URLs (and plugins): off.
+    APPRISE_ENABLED: "False"
+    # Webhook / integration targets on private, loopback and link-local IPs are refused (SSRF).
+    INTEGRATIONS_ALLOW_PRIVATE_IPS: "False"
+    # Empty = no header-based login. Set, it would let any client log in by sending a header.
+    REMOTE_USER_HEADER: ""
+    USE_PAYMENTS: "False"
+    # No inbound SMTP listener (the platform has HTTP ingress only).
+    SMTPD_PORT: ""
+  secretEnv: {}
+  configFiles: []
+  # Runs after wait-for-db: migrate, then get-or-create the admin. The password is set only
+  # when the admin is created, so a password the customer changes in the UI survives restarts.
+  # createsuperuser is not idempotent; this is (a second run just prints "exists").
+  extraInitContainers: |
+    - name: create-admin
+      image: "{{ .Values.app.image }}:{{ .Values.app.tag }}"
+      command:
+        - sh
+        - -ec
+        - |
+          printf 'healthchecks-secret-key:%s' "$ADMIN_PASSWORD" | sha256sum | cut -d' ' -f1 > /run/hc/secret_key
+          export SECRET_KEY_FILE=/run/hc/secret_key
+          ./manage.py migrate --no-input
+          ./manage.py shell -c '
+          import os
+          from django.contrib.auth.models import User
+          from hc.accounts.views import _make_user
+          from hc.api.models import Channel
+          email = os.environ["ADMIN_EMAIL"]
+          u = User.objects.filter(email=email).first()
+          if u is None:
+              u = _make_user(email)
+              Channel.objects.filter(project__owner=u, kind="email").delete()
+              u.set_password(os.environ["ADMIN_PASSWORD"])
+              print("admin", email, "created")
+          else:
+              print("admin", email, "exists")
+          u.is_staff = u.is_superuser = True
+          u.save()
+          '
+      env:
+        - name: DB
+          value: postgres
+        - name: DB_HOST
+          value: {{ include "robots.dbHost" . | quote }}
+        - name: DB_PORT
+          value: {{ include "robots.dbPort" . | quote }}
+        - name: DB_NAME
+          value: {{ .Values.dbname | quote }}
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "robots.dbSecret" . }}
+              key: {{ include "robots.dbUserKey" . }}
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "robots.dbSecret" . }}
+              key: {{ include "robots.dbPassKey" . }}
+        - name: SITE_ROOT
+          value: "https://{{ .Values.url }}"
+        - name: DEBUG
+          value: "False"
+        - name: ADMIN_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "robots.fullname" . }}-auth
+              key: username
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "robots.fullname" . }}-auth
+              key: password
+      volumeMounts:
+        - name: hc-run
+          mountPath: /run/hc
+        - name: tmp
+          mountPath: /tmp
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        readOnlyRootFilesystem: true
+        capabilities: {drop: [ALL]}
+      resources:
+        requests: {cpu: {{ .Values.sidecarCpu | quote }}, memory: 128Mi}
+        limits: {cpu: 500m, memory: 384Mi}
+  extraContainers: ""
+  # hc-run: init -> app hand-off of the derived SECRET_KEY. tmp: gunicorn's worker heartbeat
+  # files (the root filesystem is read-only).
+  emptyDirs:
+    - {name: hc-run, mountPath: /run/hc}
+    - {name: tmp, mountPath: /tmp}
+  # Checks, pings, projects and users all live in Postgres; nothing on disk.
+  persistence:
+    enabled: false
+    mountPath: /data
+  extraMounts: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    # The image's own user `hc`.
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+  securityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+
+# The login the release is handed. Healthchecks logs in by email; password = dbpass.
+auth:
+  username: "admin@{{ .Values.url }}"
+
+# none | mysql | postgres
+database:
+  type: postgres
+  supported: [postgres]
+  storage: 10Gi
+  mysqlVersion: "8.0"
+  postgresImage: ghcr.io/cloudnative-pg/postgresql:16
+
+# Untiered helper containers (redis, workers).
+appCpu: 50m
+appMemory: 128Mi
+appCpuLimit: 500m
+appMemoryLimit: 512Mi
+
+# The database. Keep dbMemoryLimit >= 512Mi for MySQL (buffer pool is sized from it).
+dbCpu: 50m
+dbMemory: 256Mi
+dbCpuLimit: 500m
+dbMemoryLimit: 768Mi
+
+# Init containers, seed Jobs, exporters.
+sidecarCpu: 10m
+sidecarMemory: 32Mi
+sidecarCpuLimit: 100m
+sidecarMemoryLimit: 128Mi
