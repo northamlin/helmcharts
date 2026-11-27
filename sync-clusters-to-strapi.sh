@@ -29,7 +29,7 @@
 #   CLUSTER_LOCATION default: UpCloud, EU
 #   SERVICES         comma-separated chart names (Strapi service `uuid`); empty = all listed
 #
-# e.g. CLUSTER_NAME=coreservice-eu-1 CLUSTER_DOMAIN=5.222.30.123.sslip.io \
+# e.g. CLUSTER_NAME=coreservice-eu-1 CLUSTER_DOMAIN=eu-core.apps.robots.beer \
 #      CLUSTER_LOCATION="Hetzner, EU" \
 #      SERVICES=ntfy,radicale,mailpit,actualbudget,homebox,qdrant,verdaccio \
 #      ./sync-clusters-to-strapi.sh
